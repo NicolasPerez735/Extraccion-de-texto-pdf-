@@ -6,9 +6,9 @@ capas y preparada para incorporar el contrato compartido
 
 ## Responsabilidad
 
-El servicio extraerá texto de documentos PDF cuando el contrato compartido y la
-librería de extracción sean confirmados. OCR, interpretación semántica,
-persistencia, colas y autenticación quedan fuera del alcance actual.
+El servicio extrae texto de documentos PDF mediante `pypdf`. OCR,
+interpretación semántica, persistencia, colas y autenticación quedan fuera del
+alcance actual.
 
 ## Estructura
 
@@ -33,13 +33,18 @@ La dirección de dependencias prevista es:
 `controllers -> services -> core/repositories`, con los schemas HTTP separados
 de los modelos de dominio.
 
-## Estado actual
+## Endpoints actuales
 
-Esta entrega crea únicamente la estructura y los límites de las capas. Incluye
-`GET /health` como endpoint técnico. Los campos de extracción, códigos de
-error, `X-Correlation-ID` y el endpoint `POST /extract` quedan pendientes de
-confirmación contra `microservicios-pdf v1.0.0`, que no está incluido en el
-clon actual.
+- `GET /health` devuelve el estado técnico del servicio.
+- `POST /extract` recibe un archivo multipart en el campo `file` y devuelve
+  `{ "text": "..." }`.
+- Las respuestas incluyen `X-Correlation-ID`; si el cliente no lo envía, el
+  servicio genera uno.
+- Solo se aceptan archivos con `Content-Type: application/pdf`.
+- El tamaño máximo predeterminado es 5 MiB.
+
+La forma definitiva del contrato compartido `microservicios-pdf v1.0.0`
+determinará si deben agregarse campos o reglas adicionales.
 
 ## Instalación y ejecución
 
@@ -64,3 +69,10 @@ uv run black --check .
 
 Copia `.env.example` como `.env`. No se versionan secretos. Las variables se
 cargan mediante Pydantic Settings.
+
+| Variable | Predeterminado | Descripción |
+| --- | --- | --- |
+| `SERVICE_NAME` | `pdf-extraction` | Nombre del servicio. |
+| `ENVIRONMENT` | `development` | Entorno de ejecución. |
+| `LOG_LEVEL` | `INFO` | Nivel de logging. |
+| `MAX_PDF_SIZE_MB` | `5` | Tamaño máximo aceptado para un PDF. |

@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     service_name: str = "pdf-extraction"
     environment: str = "development"
     log_level: str = "INFO"
+    max_pdf_size_mb: int = 5
 
     model_config = SettingsConfigDict(
         env_file=".env",

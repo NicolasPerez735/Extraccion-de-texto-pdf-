@@ -11,3 +11,7 @@ class InvalidPdfError(DomainError):
 
 class UnsupportedFileTypeError(DomainError):
     """Raised when an uploaded file has an unsupported content type."""
+
+
+class FileTooLargeError(DomainError):
+    """Raised when an uploaded file exceeds the configured size limit."""
