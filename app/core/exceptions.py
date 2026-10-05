@@ -5,5 +5,9 @@ class DomainError(Exception):
     """Base exception for expected domain errors."""
 
 
-class ContractNotConfiguredError(DomainError):
-    """Raised when a use case is invoked before its shared contract exists."""
+class InvalidPdfError(DomainError):
+    """Raised when an uploaded file is not a readable PDF."""
+
+
+class UnsupportedFileTypeError(DomainError):
+    """Raised when an uploaded file has an unsupported content type."""
