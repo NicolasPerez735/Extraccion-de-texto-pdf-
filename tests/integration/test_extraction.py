@@ -20,6 +20,24 @@ def test_rejects_a_non_pdf_upload(client: TestClient) -> None:
     assert response.status_code == 400
 
 
+def test_rejects_an_empty_pdf(client: TestClient) -> None:
+    response = client.post(
+        "/extract",
+        files={"file": ("vacio.pdf", b"", "application/pdf")},
+    )
+
+    assert response.status_code == 400
+
+
+def test_rejects_a_corrupted_pdf(client: TestClient) -> None:
+    response = client.post(
+        "/extract",
+        files={"file": ("corrupto.pdf", b"no es un pdf", "application/pdf")},
+    )
+
+    assert response.status_code == 400
+
+
 def test_returns_the_provided_correlation_id(
     client: TestClient,
     pdf_upload: dict[str, tuple[str, object, str]],

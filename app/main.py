@@ -3,6 +3,7 @@ from uuid import uuid4
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from app.controllers.extraction import router as extraction_router
 from app.controllers.health import router as health_router
 from app.core.exceptions import DomainError
 
@@ -12,6 +13,7 @@ app = FastAPI(
 )
 
 app.include_router(health_router)
+app.include_router(extraction_router)
 
 
 @app.exception_handler(DomainError)
