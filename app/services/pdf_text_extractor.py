@@ -13,7 +13,7 @@ class PdfTextExtractor:
     def extract(self, content: bytes) -> str:
         try:
             reader = pypdf.PdfReader(BytesIO(content))
-        except pypdf.errors.PdfReadError as error:
+        except (pypdf.errors.PdfReadError, pypdf.errors.EmptyFileError) as error:
             raise InvalidPdfError("El archivo PDF no es válido.") from error
 
         text = "\n".join(

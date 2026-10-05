@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, File, UploadFile
 
+from app.schemas.errors import ErrorResponse
 from app.schemas.extraction import ExtractionResponse
 from app.services.extraction import ExtractionService
 from app.services.pdf_text_extractor import PdfTextExtractor
@@ -14,7 +15,11 @@ def get_extraction_service() -> ExtractionService:
 @router.post(
     "/extract",
     response_model=ExtractionResponse,
-    responses={400: {"description": "Invalid PDF or unsupported file type"}},
+    responses={
+        400: {"model": ErrorResponse},
+        413: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+    },
 )
 async def extract(
     file: UploadFile = File(...),

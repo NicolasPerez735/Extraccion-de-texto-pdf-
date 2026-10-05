@@ -42,9 +42,34 @@ de los modelos de dominio.
   servicio genera uno.
 - Solo se aceptan archivos con `Content-Type: application/pdf`.
 - El tamaño máximo predeterminado es 5 MiB.
+- Los errores devuelven `code`, `detail` y `correlation_id`.
 
 La forma definitiva del contrato compartido `microservicios-pdf v1.0.0`
 determinará si deben agregarse campos o reglas adicionales.
+
+### Ejemplo
+
+```powershell
+curl.exe -X POST http://127.0.0.1:8000/extract `
+  -H "X-Correlation-ID: local-test" `
+  -F "file=@documento.pdf;type=application/pdf"
+```
+
+Respuesta exitosa:
+
+```json
+{"text":"Texto extraído del documento"}
+```
+
+Errores:
+
+```json
+{
+  "code": "UNSUPPORTED_FILE_TYPE",
+  "detail": "El archivo debe ser un PDF válido.",
+  "correlation_id": "local-test"
+}
+```
 
 ## Instalación y ejecución
 
@@ -56,6 +81,18 @@ uv run uvicorn app.main:app --reload
 ```
 
 La documentación interactiva queda disponible en `http://127.0.0.1:8000/docs`.
+
+## Docker
+
+La imagen se construye sin incluir `Contexto/`, secretos ni caches locales:
+
+```powershell
+docker build -t pdf-extraction .
+docker run --rm -p 8000:8000 pdf-extraction
+```
+
+El contenedor ejecuta la aplicación como `appuser` y expone un healthcheck
+contra `GET /health`. La persistencia y MongoDB no forman parte de esta versión.
 
 ## Calidad
 
@@ -76,3 +113,9 @@ cargan mediante Pydantic Settings.
 | `ENVIRONMENT` | `development` | Entorno de ejecución. |
 | `LOG_LEVEL` | `INFO` | Nivel de logging. |
 | `MAX_PDF_SIZE_MB` | `5` | Tamaño máximo aceptado para un PDF. |
+
+## Alcance y deuda técnica
+
+Esta versión no persiste resultados y no incluye OCR, autenticación, colas ni
+integraciones externas. El contrato compartido puede requerir ampliar los
+schemas antes de considerar estable la API pública.
