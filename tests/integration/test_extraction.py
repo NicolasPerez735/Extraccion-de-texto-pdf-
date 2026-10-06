@@ -1,6 +1,7 @@
 import base64
 import hashlib
 
+import pytest
 from fastapi.testclient import TestClient
 
 
@@ -93,3 +94,24 @@ def test_pdf_without_text_returns_empty_text(client: TestClient, make_pdf) -> No
     assert response.status_code == 200
     assert response.json()["texto"] == ""
     assert response.json()["paginas"] == 1
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        pytest.param({"nombre": "contrato.pdf"}, id="sin-archivo"),
+        pytest.param({"archivo_base64": "JVBERi0="}, id="sin-nombre"),
+        pytest.param({"archivo_base64": "JVBERi0=", "nombre": ""}, id="nombre-vacio"),
+    ],
+)
+def test_invalid_request_returns_validation_error(
+    client: TestClient, body: dict[str, str]
+) -> None:
+    response = client.post(
+        "/extraer", json=body, headers={"X-Correlation-ID": "request-invalido"}
+    )
+
+    assert response.status_code == 400
+    error = response.json()["error"]
+    assert error["code"] == "VALIDATION_ERROR"
+    assert error["correlation_id"] == "request-invalido"
