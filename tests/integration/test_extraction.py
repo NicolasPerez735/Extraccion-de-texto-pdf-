@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import logging
 
 import pytest
 from fastapi.testclient import TestClient
@@ -142,3 +143,26 @@ def test_extraer_reports_the_extraction_time(
     response = client.post("/extraer", json=pdf_request)
 
     assert float(response.headers["X-Extraction-Time-Ms"]) >= 0
+
+
+def test_request_log_includes_correlation_id(
+    client: TestClient, pdf_request: dict[str, str], caplog
+) -> None:
+    caplog.set_level(logging.INFO, logger="extraccion_texto")
+
+    client.post("/extraer", json=pdf_request, headers={"X-Correlation-ID": "log-123"})
+
+    assert "correlation_id=log-123" in caplog.text
+    assert "path=/extraer" in caplog.text
+
+
+def test_error_log_includes_code_and_correlation_id(client: TestClient, caplog) -> None:
+    caplog.set_level(logging.INFO, logger="extraccion_texto")
+
+    client.post(
+        "/extraer",
+        json={"archivo_base64": "no-es-base64", "nombre": "contrato.pdf"},
+        headers={"X-Correlation-ID": "log-error"},
+    )
+
+    assert "correlation_id=log-error code=PDF_INVALID" in caplog.text
