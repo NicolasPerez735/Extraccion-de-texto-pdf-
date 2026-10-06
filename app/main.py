@@ -1,6 +1,7 @@
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -33,17 +34,17 @@ async def handle_domain_error(request: Request, error: DomainError) -> JSONRespo
 
 @app.exception_handler(RequestValidationError)
 async def handle_request_validation(
-    request: Request, _: RequestValidationError
+    request: Request, error: RequestValidationError
 ) -> JSONResponse:
     body = ErrorResponse(
         error=ErrorDetail(
-            code="INVALID_REQUEST",
+            code="VALIDATION_ERROR",
             message="La solicitud no cumple el contrato esperado.",
-            details={},
+            details={"errors": jsonable_encoder(error.errors())},
             correlation_id=request.state.correlation_id,
         )
     )
-    return JSONResponse(status_code=422, content=body.model_dump())
+    return JSONResponse(status_code=400, content=body.model_dump())
 
 
 @app.middleware("http")
