@@ -47,6 +47,25 @@ async def handle_request_validation(
     return JSONResponse(status_code=400, content=body.model_dump())
 
 
+@app.exception_handler(Exception)
+async def handle_unexpected_error(request: Request, _: Exception) -> JSONResponse:
+    # Corre fuera del middleware de correlation ID: el header se agrega acá.
+    correlation_id = request.state.correlation_id
+    body = ErrorResponse(
+        error=ErrorDetail(
+            code="INTERNAL_ERROR",
+            message="Error interno del servidor.",
+            details={},
+            correlation_id=correlation_id,
+        )
+    )
+    return JSONResponse(
+        status_code=500,
+        content=body.model_dump(),
+        headers={"X-Correlation-ID": correlation_id},
+    )
+
+
 @app.middleware("http")
 async def correlation_id_middleware(request: Request, call_next):
     correlation_id = request.headers.get("X-Correlation-ID") or str(uuid4())
