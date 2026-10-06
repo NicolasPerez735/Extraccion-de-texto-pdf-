@@ -115,3 +115,22 @@ def test_invalid_request_returns_validation_error(
     error = response.json()["error"]
     assert error["code"] == "VALIDATION_ERROR"
     assert error["correlation_id"] == "request-invalido"
+
+
+def test_unexpected_error_returns_internal_error(
+    failing_client: TestClient, pdf_request: dict[str, str]
+) -> None:
+    response = failing_client.post(
+        "/extraer", json=pdf_request, headers={"X-Correlation-ID": "falla-500"}
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "error": {
+            "code": "INTERNAL_ERROR",
+            "message": "Error interno del servidor.",
+            "details": {},
+            "correlation_id": "falla-500",
+        }
+    }
+    assert response.headers["X-Correlation-ID"] == "falla-500"

@@ -3,6 +3,7 @@ import base64
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.composition import get_extraction_service
 from app.main import app
 
 
@@ -68,3 +69,17 @@ def pdf_bytes() -> bytes:
 @pytest.fixture
 def pdf_request(pdf_bytes: bytes) -> dict[str, str]:
     return {"archivo_base64": encode(pdf_bytes), "nombre": "contrato.pdf"}
+
+
+class ServicioQueFalla:
+    """Doble de test: simula un error no previsto dentro del servicio."""
+
+    def extraer(self, archivo_base64: str, nombre: str):
+        raise RuntimeError("falla inesperada")
+
+
+@pytest.fixture
+def failing_client():
+    app.dependency_overrides[get_extraction_service] = ServicioQueFalla
+    yield TestClient(app, raise_server_exceptions=False)
+    app.dependency_overrides.clear()
