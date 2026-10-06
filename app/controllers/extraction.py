@@ -1,30 +1,31 @@
-from fastapi import APIRouter, Depends, File, UploadFile
+import time
+from typing import Annotated
 
-from app.schemas.errors import ErrorResponse
-from app.schemas.extraction import ExtractionResponse
+from fastapi import APIRouter, Depends, Response
+
+from app.core.composition import get_extraction_service
+from app.schemas.extraction import ExtractionRequest, ExtractionResponse
 from app.services.extraction import ExtractionService
-from app.services.pdf_text_extractor import PdfTextExtractor
 
 router = APIRouter(tags=["extraction"])
 
-
-def get_extraction_service() -> ExtractionService:
-    return ExtractionService(PdfTextExtractor())
+ExtractionServiceDep = Annotated[ExtractionService, Depends(get_extraction_service)]
 
 
-@router.post(
-    "/extract",
-    response_model=ExtractionResponse,
-    responses={
-        400: {"model": ErrorResponse},
-        413: {"model": ErrorResponse},
-        422: {"model": ErrorResponse},
-    },
-)
-async def extract(
-    file: UploadFile = File(...),
-    service: ExtractionService = Depends(get_extraction_service),
+@router.post("/extraer", response_model=ExtractionResponse)
+def extraer(
+    payload: ExtractionRequest, service: ExtractionServiceDep, response: Response
 ) -> ExtractionResponse:
-    content = await file.read()
-    text = await service.extract(content, file.content_type)
-    return ExtractionResponse(text=text)
+    # Sincrónico a propósito: FastAPI lo corre en el threadpool, así pypdf
+    # (sincrónico y pesado) no bloquea el event loop.
+    inicio = time.perf_counter()
+    resultado = service.extraer(payload.archivo_base64, payload.nombre)
+    duracion_ms = (time.perf_counter() - inicio) * 1000
+    response.headers["X-Extraction-Time-Ms"] = f"{duracion_ms:.1f}"
+    return ExtractionResponse(
+        nombre=resultado.nombre,
+        texto=resultado.texto,
+        checksum=resultado.checksum,
+        tamano_bytes=resultado.tamano_bytes,
+        paginas=resultado.paginas,
+    )

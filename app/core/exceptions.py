@@ -7,19 +7,13 @@ class DomainError(Exception):
     code = "DOMAIN_ERROR"
 
 
-class InvalidPdfError(DomainError):
-    """Raised when an uploaded file is not a readable PDF."""
+class PdfInvalidError(DomainError):
+    """Raised when the content is not a PDF (Base64 inválido, vacío o sin %PDF)."""
 
-    code = "INVALID_PDF"
-
-
-class UnsupportedFileTypeError(DomainError):
-    """Raised when an uploaded file has an unsupported content type."""
-
-    code = "UNSUPPORTED_FILE_TYPE"
+    code = "PDF_INVALID"
 
 
-class FileTooLargeError(DomainError):
-    """Raised when an uploaded file exceeds the configured size limit."""
+class PdfCorruptedError(DomainError):
+    """Raised when pypdf cannot read the PDF or extract its text."""
 
-    code = "FILE_TOO_LARGE"
+    code = "PDF_CORRUPTED"
