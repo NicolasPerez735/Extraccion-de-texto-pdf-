@@ -1,7 +1,7 @@
 [project]
 name = "pdf-extraction"
 version = "0.1.0"
-description = "Base structure for the PDF text extraction microservice"
+description = "Microservicio de extraccion de texto de PDF (contrato microservicios-pdf v1.0.0)"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
