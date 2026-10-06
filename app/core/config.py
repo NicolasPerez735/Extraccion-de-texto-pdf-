@@ -6,8 +6,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Runtime configuration loaded from environment variables."""
 
-    service_name: str = "pdf-extraction"
-    environment: str = "development"
     log_level: str = "INFO"
 
     model_config = SettingsConfigDict(
