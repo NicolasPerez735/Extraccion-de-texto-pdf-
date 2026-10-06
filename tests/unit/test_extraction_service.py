@@ -1,41 +1,42 @@
-import pytest
+import base64
+import hashlib
 
-from app.core.exceptions import FileTooLargeError, UnsupportedFileTypeError
+from app.models.extraction import TextoExtraido
 from app.services.extraction import ExtractionService
+
+PDF_CONTENT = b"%PDF-1.4\ncontenido\n%%EOF"
 
 
 class StubExtractor:
-    def __init__(self, text: str = "Texto extraído") -> None:
+    def __init__(self, texto: str = "Texto extraído", paginas: int = 3) -> None:
         self.content: bytes | None = None
-        self._text = text
+        self._resultado = TextoExtraido(texto=texto, paginas=paginas)
 
-    def extract(self, content: bytes) -> str:
+    def extract(self, content: bytes) -> TextoExtraido:
         self.content = content
-        return self._text
+        return self._resultado
 
 
-@pytest.mark.anyio
-async def test_service_delegates_pdf_content_to_extractor() -> None:
+def encode(content: bytes) -> str:
+    return base64.b64encode(content).decode("ascii")
+
+
+def test_extraer_returns_the_contract_fields() -> None:
+    service = ExtractionService(StubExtractor())
+
+    result = service.extraer(encode(PDF_CONTENT), "contrato.pdf")
+
+    assert result.nombre == "contrato.pdf"
+    assert result.texto == "Texto extraído"
+    assert result.checksum == hashlib.sha256(PDF_CONTENT).hexdigest()
+    assert result.tamano_bytes == len(PDF_CONTENT)
+    assert result.paginas == 3
+
+
+def test_extraer_passes_the_decoded_bytes_to_the_extractor() -> None:
     extractor = StubExtractor()
     service = ExtractionService(extractor)
 
-    result = await service.extract(b"pdf-content", "application/pdf")
+    service.extraer(encode(PDF_CONTENT), "contrato.pdf")
 
-    assert result == "Texto extraído"
-    assert extractor.content == b"pdf-content"
-
-
-@pytest.mark.anyio
-async def test_service_rejects_unsupported_content_type() -> None:
-    service = ExtractionService(StubExtractor())
-
-    with pytest.raises(UnsupportedFileTypeError):
-        await service.extract(b"plain-text", "text/plain")
-
-
-@pytest.mark.anyio
-async def test_service_rejects_content_over_maximum_size() -> None:
-    service = ExtractionService(StubExtractor())
-
-    with pytest.raises(FileTooLargeError, match="tamaño máximo"):
-        await service.extract(b"x" * (5 * 1024 * 1024 + 1), "application/pdf")
+    assert extractor.content == PDF_CONTENT
