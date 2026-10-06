@@ -134,3 +134,11 @@ def test_unexpected_error_returns_internal_error(
         }
     }
     assert response.headers["X-Correlation-ID"] == "falla-500"
+
+
+def test_extraer_reports_the_extraction_time(
+    client: TestClient, pdf_request: dict[str, str]
+) -> None:
+    response = client.post("/extraer", json=pdf_request)
+
+    assert float(response.headers["X-Extraction-Time-Ms"]) >= 0
