@@ -80,3 +80,16 @@ def test_corrupted_pdf_returns_pdf_corrupted(client: TestClient) -> None:
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "PDF_CORRUPTED"
+
+
+def test_pdf_without_text_returns_empty_text(client: TestClient, make_pdf) -> None:
+    # Decisión del grupo: un PDF sin texto (por ejemplo, escaneado) es válido;
+    # el contrato no tiene un código de error para este caso.
+    response = client.post(
+        "/extraer",
+        json={"archivo_base64": encode(make_pdf("")), "nombre": "escaneo.pdf"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["texto"] == ""
+    assert response.json()["paginas"] == 1
