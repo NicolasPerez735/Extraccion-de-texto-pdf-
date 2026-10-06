@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from app.controllers.extraction import router as extraction_router
 from app.controllers.health import router as health_router
 from app.core.exceptions import DomainError
-from app.schemas.errors import ErrorResponse
+from app.schemas.errors import ErrorDetail, ErrorResponse
 
 app = FastAPI(
     title="PDF Extraction",
@@ -20,14 +20,15 @@ app.include_router(extraction_router)
 
 @app.exception_handler(DomainError)
 async def handle_domain_error(request: Request, error: DomainError) -> JSONResponse:
-    status_code = 413 if error.code == "FILE_TOO_LARGE" else 400
-    correlation_id = request.state.correlation_id
     body = ErrorResponse(
-        code=error.code,
-        detail=str(error),
-        correlation_id=correlation_id,
+        error=ErrorDetail(
+            code=error.code,
+            message=str(error),
+            details={},
+            correlation_id=request.state.correlation_id,
+        )
     )
-    return JSONResponse(status_code=status_code, content=body.model_dump())
+    return JSONResponse(status_code=422, content=body.model_dump())
 
 
 @app.exception_handler(RequestValidationError)
@@ -35,9 +36,12 @@ async def handle_request_validation(
     request: Request, _: RequestValidationError
 ) -> JSONResponse:
     body = ErrorResponse(
-        code="INVALID_REQUEST",
-        detail="La solicitud no cumple el contrato esperado.",
-        correlation_id=request.state.correlation_id,
+        error=ErrorDetail(
+            code="INVALID_REQUEST",
+            message="La solicitud no cumple el contrato esperado.",
+            details={},
+            correlation_id=request.state.correlation_id,
+        )
     )
     return JSONResponse(status_code=422, content=body.model_dump())
 

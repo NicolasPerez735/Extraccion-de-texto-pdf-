@@ -7,6 +7,12 @@ class DomainError(Exception):
     code = "DOMAIN_ERROR"
 
 
+class PdfInvalidError(DomainError):
+    """Raised when the content is not a PDF (Base64 inválido, vacío o sin %PDF)."""
+
+    code = "PDF_INVALID"
+
+
 class InvalidPdfError(DomainError):
     """Raised when an uploaded file is not a readable PDF."""
 
