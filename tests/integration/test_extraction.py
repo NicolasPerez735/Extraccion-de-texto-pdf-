@@ -1,6 +1,11 @@
+import base64
 import hashlib
 
 from fastapi.testclient import TestClient
+
+
+def encode(content: bytes) -> str:
+    return base64.b64encode(content).decode("ascii")
 
 
 def test_health_returns_ok(client: TestClient) -> None:
@@ -62,3 +67,16 @@ def test_invalid_pdf_returns_the_common_error_format(client: TestClient) -> None
     assert error["details"] == {}
     assert error["correlation_id"] == "error-correlation-id"
     assert response.headers["X-Correlation-ID"] == "error-correlation-id"
+
+
+def test_corrupted_pdf_returns_pdf_corrupted(client: TestClient) -> None:
+    response = client.post(
+        "/extraer",
+        json={
+            "archivo_base64": encode(b"%PDF-1.4\ncontenido roto"),
+            "nombre": "roto.pdf",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "PDF_CORRUPTED"
