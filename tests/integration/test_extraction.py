@@ -46,3 +46,19 @@ def test_generates_a_correlation_id_when_missing(
 
     assert response.status_code == 200
     assert response.headers["X-Correlation-ID"]
+
+
+def test_invalid_pdf_returns_the_common_error_format(client: TestClient) -> None:
+    response = client.post(
+        "/extraer",
+        json={"archivo_base64": "no-es-base64", "nombre": "contrato.pdf"},
+        headers={"X-Correlation-ID": "error-correlation-id"},
+    )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "PDF_INVALID"
+    assert error["message"]
+    assert error["details"] == {}
+    assert error["correlation_id"] == "error-correlation-id"
+    assert response.headers["X-Correlation-ID"] == "error-correlation-id"
