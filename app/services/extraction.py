@@ -1,26 +1,25 @@
-"""PDF extraction use case."""
+"""Caso de uso de extracción de texto de un PDF."""
 
-from app.core.config import get_settings
-from app.core.exceptions import FileTooLargeError, UnsupportedFileTypeError
+import base64
+import hashlib
+
+from app.models.extraction import PdfExtraction
 from app.services.text_extractor import TextExtractor
 
 
 class ExtractionService:
-    """Validates an upload and delegates PDF parsing to an extractor."""
+    """Decodifica el PDF, delega la lectura en el extractor y calcula el checksum."""
 
     def __init__(self, extractor: TextExtractor) -> None:
         self._extractor = extractor
 
-    async def extract(self, content: bytes, content_type: str | None) -> str:
-        if content_type != "application/pdf":
-            raise UnsupportedFileTypeError("El archivo debe ser un PDF válido.")
-
-        settings = get_settings()
-        maximum_size = settings.max_pdf_size_mb * 1024 * 1024
-        if len(content) > maximum_size:
-            raise FileTooLargeError(
-                f"El archivo excede el tamaño máximo de "
-                f"{settings.max_pdf_size_mb}MB."
-            )
-
-        return self._extractor.extract(content)
+    def extraer(self, archivo_base64: str, nombre: str) -> PdfExtraction:
+        contenido = base64.b64decode(archivo_base64)
+        resultado = self._extractor.extract(contenido)
+        return PdfExtraction(
+            nombre=nombre,
+            texto=resultado.texto,
+            checksum=hashlib.sha256(contenido).hexdigest(),
+            tamano_bytes=len(contenido),
+            paginas=resultado.paginas,
+        )
