@@ -13,7 +13,7 @@ class PdfInvalidError(DomainError):
     code = "PDF_INVALID"
 
 
-class InvalidPdfError(DomainError):
-    """Raised when an uploaded file is not a readable PDF."""
+class PdfCorruptedError(DomainError):
+    """Raised when pypdf cannot read the PDF or extract its text."""
 
-    code = "INVALID_PDF"
+    code = "PDF_CORRUPTED"
