@@ -1,15 +1,11 @@
 from fastapi import APIRouter, Depends, File, UploadFile
 
+from app.core.composition import get_extraction_service
 from app.schemas.errors import ErrorResponse
 from app.schemas.extraction import ExtractionResponse
 from app.services.extraction import ExtractionService
-from app.services.pdf_text_extractor import PdfTextExtractor
 
 router = APIRouter(tags=["extraction"])
-
-
-def get_extraction_service() -> ExtractionService:
-    return ExtractionService(PdfTextExtractor())
 
 
 @router.post(
