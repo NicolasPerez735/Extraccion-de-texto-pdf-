@@ -1,4 +1,13 @@
-FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim
+# Base Debian 13 (python:3.11-slim): la uv:python3.11-bookworm-slim (Debian 12) traía
+# vulnerabilidades Critical en openssl, gnutls, perl y glibc según Grype. Se queda en
+# Python 3.11 porque pypdf extrae ~8 % más rápido que con 3.12 (medido con k6).
+FROM python:3.11-slim
+
+COPY --from=ghcr.io/astral-sh/uv:0.11.15 /uv /usr/local/bin/uv
+
+# setuptools y wheel vienen preinstalados en el Python de la imagen base (no en el venv
+# de la app, que no los usa) y Grype marca dos vulnerabilidades High en lo que traen.
+RUN python -m pip uninstall --yes --quiet setuptools wheel
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
