@@ -3,10 +3,13 @@
 import base64
 import binascii
 import hashlib
+import logging
 
 from app.core.exceptions import PdfInvalidError
 from app.models.extraction import PdfExtraction
 from app.services.text_extractor import TextExtractor
+
+logger = logging.getLogger(__name__)
 
 
 def _decodificar_pdf(archivo_base64: str) -> bytes:
@@ -28,10 +31,19 @@ class ExtractionService:
     def extraer(self, archivo_base64: str, nombre: str) -> PdfExtraction:
         contenido = _decodificar_pdf(archivo_base64)
         resultado = self._extractor.extract(contenido)
-        return PdfExtraction(
+        extraccion = PdfExtraction(
             nombre=nombre,
             texto=resultado.texto,
             checksum=hashlib.sha256(contenido).hexdigest(),
             tamano_bytes=len(contenido),
             paginas=resultado.paginas,
         )
+        # Sin nombre ni texto (contrato 1.2.0): el documento se identifica por checksum.
+        logger.info(
+            "texto extraido paginas=%d tamano_bytes=%d caracteres=%d checksum=%s",
+            extraccion.paginas,
+            extraccion.tamano_bytes,
+            len(extraccion.texto),
+            extraccion.checksum,
+        )
+        return extraccion

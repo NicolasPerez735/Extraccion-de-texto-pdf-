@@ -10,9 +10,7 @@ def _mensajes(caplog) -> list[str]:
     return [record.getMessage() for record in caplog.records]
 
 
-def test_extraccion_registra_paginas_y_checksum(
-    client, pdf_request, pdf_bytes, caplog
-):
+def test_extraccion_registra_paginas_y_checksum(client, pdf_request, pdf_bytes, caplog):
     caplog.set_level(logging.INFO)
 
     client.post("/extraer", json=pdf_request, headers={"X-Correlation-ID": "cid-1"})
