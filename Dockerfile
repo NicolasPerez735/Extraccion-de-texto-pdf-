@@ -1,4 +1,8 @@
-FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim
+# Base Debian 13 (python:3.12-slim): la uv:python3.11-bookworm-slim (Debian 12) traía
+# vulnerabilidades Critical en openssl, gnutls, perl y glibc según Grype.
+FROM python:3.12-slim
+
+COPY --from=ghcr.io/astral-sh/uv:0.11.15 /uv /usr/local/bin/uv
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
