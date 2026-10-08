@@ -19,6 +19,7 @@ WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev --no-install-project
 
+COPY logging.json ./
 COPY app ./app
 RUN uv sync --frozen --no-dev
 
@@ -32,4 +33,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
     CMD /app/.venv/bin/python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"
 
 # --no-access-log: el acceso lo registra la app con el correlation_id.
-CMD ["/app/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
+# Forma exec: uvicorn es el PID 1 y recibe el SIGTERM de docker stop. Con
+# --timeout-graceful-shutdown deja de aceptar conexiones y espera hasta 30 s a que
+# terminen las requests en curso antes de salir (contrato 1.2.0, 12-Factor IX).
+CMD ["/app/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log", "--timeout-graceful-shutdown", "30"]

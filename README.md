@@ -2,7 +2,7 @@
 
 Microservicio de extracción de texto de documentos PDF del proyecto
 `microservicios-pdf`. Implementa la sección `extraccion-texto` del contrato
-compartido `microservicios-pdf v1.0.0`.
+compartido `microservicios-pdf` (versión 1.2.0, en el repo `integracion`).
 
 ## Responsabilidad
 
@@ -114,6 +114,7 @@ app/
 └── core/
     ├── composition.py         # único lugar donde se arma el servicio
     ├── pdf_text_extractor.py  # adaptador de pypdf
+    ├── logs.py                # carga logging.json y agrega el correlation_id
     ├── config.py
     └── exceptions.py          # PdfInvalidError, PdfCorruptedError
 ```
@@ -127,17 +128,48 @@ lo ejecuta en su threadpool, así pypdf (sincrónico y con uso intensivo de CPU)
 no bloquea el event loop y `/health` sigue respondiendo bajo carga. Por el GIL,
 el paralelismo real se obtiene con réplicas detrás de Traefik.
 
-## Logs
+## Logs (12-Factor XI)
 
-Van a `stdout`, sin archivos, y cada línea incluye el `correlation_id`:
+Van a `stdout`, sin archivos. La configuración está en [`logging.json`](logging.json),
+en la raíz del repo (formato `dictConfig`), y el nivel sale de `LOG_LEVEL`. Cada línea
+lleva fecha, nivel, logger y `correlation_id` (`-` fuera de una request):
 
 ```text
-2026-10-06 19:42:24,176 INFO extraccion_texto correlation_id=demo-1 method=POST path=/extraer status=200 duracion_ms=4.3
-2026-10-06 19:42:24,180 WARNING extraccion_texto correlation_id=demo-2 code=PDF_INVALID status=422 message=El archivo no es un PDF válido.
+INFO extraccion_texto correlation_id=- servicio iniciado
+INFO app.services.extraction correlation_id=en-curso texto extraido paginas=1500 tamano_bytes=354327 caracteres=5526148 checksum=367aea83...
+INFO extraccion_texto correlation_id=en-curso method=POST path=/extraer status=200 duracion_ms=17833.1
+WARNING extraccion_texto correlation_id=demo-2 code=PDF_INVALID status=422 message=El archivo no es un PDF válido.
 ```
 
-Los avisos internos de pypdf se limitan a nivel `ERROR` porque no llevan
-`correlation_id`, y el access log de uvicorn está desactivado en la imagen.
+| Nivel | Qué registra este servicio |
+| --- | --- |
+| `INFO` | Cada request (`method`, `path`, `status`, `duracion_ms`), el texto extraído (`paginas`, `tamano_bytes`, `caracteres`, `checksum`), inicio y apagado. |
+| `WARNING` | Rechazos del contrato (`PDF_INVALID`, `PDF_CORRUPTED`, `VALIDATION_ERROR`) con su `code`. |
+| `ERROR` | Error no previsto (`INTERNAL_ERROR`), con traceback. |
+
+**No se registran** el Base64, el texto extraído ni el nombre del archivo (puede tener
+datos personales): el documento se identifica por su `checksum`. Hay un test que lo
+verifica. El `correlation_id` viaja en un `ContextVar` y lo agrega el formato, así que
+llega también al threadpool donde corre pypdf. Los avisos internos de pypdf quedan en
+`ERROR`, y el access log de uvicorn está desactivado porque lo registra la app.
+
+## Finalización segura (12-Factor IX)
+
+La imagen corre uvicorn como PID 1 con `--timeout-graceful-shutdown 30`. Ante `SIGTERM`
+(`docker stop`) deja de aceptar conexiones, termina las extracciones en curso, ejecuta el
+cierre del `lifespan` (`apagado iniciado` / `apagado completo`) y sale con código 0. Para
+que Docker no mande `SIGKILL` antes, detener con `docker stop -t 40` (en el compose de
+integración, `stop_grace_period: 40s`).
+
+Prueba hecha con la imagen `1.0.3` (2026-10-07): extracción de un PDF de 1500 páginas
+(18 s) y `docker stop -t 40` a los 4 s.
+
+| Qué se miró | Resultado |
+| --- | --- |
+| Request en curso | `200` con el texto completo |
+| Request nueva durante el apagado | rechazada (puerto ya cerrado) |
+| Logs | `Shutting down` → `Waiting for connections to close` → la extracción termina → `apagado iniciado` → `apagado completo` |
+| `docker inspect --format '{{.State.ExitCode}}'` | `0` |
 
 ## Instalación y ejecución
 
@@ -154,15 +186,15 @@ Copiar `.env.example` como `.env`. No se versionan secretos.
 
 | Variable | Predeterminado | Descripción |
 | --- | --- | --- |
-| `LOG_LEVEL` | `INFO` | Nivel de logging. |
+| `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING` o `ERROR`. Otro valor impide arrancar. |
 
-El contrato no define variables para este servicio.
+`LOG_LEVEL` es la única variable del servicio (contrato 1.2.0).
 
 ## Docker
 
 ```powershell
-docker build -t extraccion-texto:1.0.0 .
-docker run --rm -p 8000:8000 extraccion-texto:1.0.0
+docker build -t extraccion-texto:1.0.3 .
+docker run --rm -p 8000:8000 extraccion-texto:1.0.3
 ```
 
 La imagen corre como `appuser` y tiene un `HEALTHCHECK` contra `GET /health`.
@@ -185,8 +217,12 @@ La suite es hermética: no necesita red, base de datos ni `.env`.
 - **Integración HTTP:** respuesta del contrato, cada código de error, PDF sin
   texto, `X-Correlation-ID`, `X-Extraction-Time-Ms` y logs. El error no previsto
   se prueba inyectando un servicio que falla (`app.dependency_overrides`).
+- **Logs:** `LOG_LEVEL` inválido, formato con `correlation_id`, evento de extracción,
+  ausencia de datos sensibles, inicio y apagado en el `lifespan`.
 
-Queda fuera a propósito: la imagen Docker (se verifica con su healthcheck).
+Queda fuera a propósito: la imagen Docker (se verifica con su healthcheck) y el
+apagado con `SIGTERM`, que depende del proceso de uvicorn y se probó a mano (ver
+"Finalización segura").
 
 ## Decisiones y deuda técnica
 
