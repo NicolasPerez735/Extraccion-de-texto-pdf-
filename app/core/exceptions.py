@@ -14,6 +14,16 @@ class PdfInvalidError(DomainError):
 
 
 class PdfCorruptedError(DomainError):
-    """Raised when pypdf cannot read the PDF or extract its text."""
+    """Raised when pypdf or MuPDF cannot read the PDF or extract its text."""
 
     code = "PDF_CORRUPTED"
+
+
+class ServiceOverloadedError(Exception):
+    """Backpressure de /extract: la cola de la réplica está llena o la espera venció.
+    Se responde 503 enseguida para que el cliente reintente (o vaya a otra réplica)
+    en vez de esperar hasta su timeout."""
+
+    def __init__(self, motivo: str) -> None:
+        super().__init__(f"Servicio saturado: {motivo}")
+        self.motivo = motivo

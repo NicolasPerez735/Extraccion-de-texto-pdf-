@@ -13,7 +13,7 @@ from app.controllers.extraction import router as extraction_router
 from app.controllers.health import router as health_router
 from app.core.composition import crear_convertidor
 from app.core.config import get_settings
-from app.core.exceptions import DomainError
+from app.core.exceptions import DomainError, ServiceOverloadedError
 from app.core.logs import configurar_logs, correlation_id_actual
 from app.schemas.errors import ErrorDetail, ErrorResponse
 
@@ -56,8 +56,10 @@ def error_response(
     """Formato común de errores del contrato. El header se agrega acá porque el
     handler de Exception corre fuera del middleware de correlation ID."""
     correlation_id = request.state.correlation_id
+    # ERROR solo para fallas no esperadas; un 503 por saturación es recuperable
+    # (WARNING, contrato 1.2.0).
     logger.log(
-        logging.ERROR if status_code >= 500 else logging.WARNING,
+        logging.ERROR if exc_info is not None else logging.WARNING,
         "code=%s status=%s message=%s",
         code,
         status_code,
@@ -84,6 +86,21 @@ async def handle_domain_error(request: Request, error: DomainError) -> JSONRespo
     # Todos los errores de dominio del contrato para este servicio
     # (PDF_INVALID, PDF_CORRUPTED) son 422.
     return error_response(request, 422, error.code, str(error), {})
+
+
+@app.exception_handler(ServiceOverloadedError)
+async def handle_service_overloaded(
+    request: Request, error: ServiceOverloadedError
+) -> JSONResponse:
+    respuesta = error_response(
+        request,
+        503,
+        "DEPENDENCY_UNAVAILABLE",
+        "El servicio está saturado, reintentar en un momento.",
+        {"reason": error.motivo},
+    )
+    respuesta.headers["Retry-After"] = "1"
+    return respuesta
 
 
 @app.exception_handler(RequestValidationError)

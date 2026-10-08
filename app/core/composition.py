@@ -20,8 +20,13 @@ def get_extraction_service() -> ExtractionService:
 
 def crear_convertidor(settings: Settings) -> PoolMarkdownConverter:
     """El lifespan lo crea al iniciar y lo cierra al apagar (12-Factor IX)."""
-    executor = ProcessPoolExecutor(max_workers=settings.extract_workers)
-    return PoolMarkdownConverter(pdf_a_markdown, executor)
+    return PoolMarkdownConverter(
+        pdf_a_markdown,
+        ProcessPoolExecutor(max_workers=settings.extract_workers),
+        en_paralelo=settings.extract_workers,
+        cola_maxima=settings.extract_max_queue,
+        espera_maxima_segundos=settings.extract_queue_timeout_seconds,
+    )
 
 
 def get_conversion_service(request: Request) -> ConversionService:
