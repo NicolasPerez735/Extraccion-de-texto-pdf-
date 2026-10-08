@@ -11,7 +11,7 @@ name: extraccion-tp-carga
 services:
   extraccion:
     build: .
-    image: extraccion-texto:1.1.1
+    image: extraccion-texto:1.1.2
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       EXTRACT_WORKERS: ${EXTRACT_WORKERS:-1}
