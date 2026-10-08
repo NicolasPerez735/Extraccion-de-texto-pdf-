@@ -3,7 +3,6 @@
 # Python 3.11 porque pypdf extrae ~8 % más rápido que con 3.12 (medido con k6).
 FROM python:3.11-slim
 
-COPY --from=ghcr.io/astral-sh/uv:0.11.15 /uv /usr/local/bin/uv
 
 # setuptools y wheel vienen preinstalados en el Python de la imagen base (no en el venv
 # de la app, que no los usa) y Grype marca dos vulnerabilidades High en lo que traen.
@@ -17,11 +16,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY pyproject.toml uv.lock README.md ./
-RUN uv sync --frozen --no-dev --no-install-project
+# uv se monta solo durante este RUN (--mount=from=...) y no queda en la imagen final:
+# Grype marcaba High en librerías de Rust compiladas dentro del binario (quinn-proto,
+# rustls-webpki).
+RUN --mount=from=ghcr.io/astral-sh/uv:0.11.15,source=/uv,target=/bin/uv \
+    uv sync --frozen --no-dev --no-install-project
 
 COPY logging.json ./
 COPY app ./app
-RUN uv sync --frozen --no-dev
+RUN --mount=from=ghcr.io/astral-sh/uv:0.11.15,source=/uv,target=/bin/uv \
+    uv sync --frozen --no-dev
 
 RUN useradd --create-home --shell /usr/sbin/nologin appuser \
     && chown -R appuser:appuser /app
