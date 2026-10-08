@@ -2,7 +2,7 @@
 // bajada a 0 en 10 s, contra POST /extract con el PDF binario en el body.
 //
 //   k6 run tests/stress/spike.js
-//   k6 run -e BASE_URL=http://localhost:8080 -e PDFS=a.pdf,b.pdf tests/stress/spike.js
+//   k6 run -e BASE_URL=http://127.0.0.1:8080 -e PDFS=a.pdf,b.pdf tests/stress/spike.js
 //
 // Los PDFs se leen de tests/stress/pdfs/ (k6 no puede listar carpetas: los nombres van en
 // PDFS). Cada VU rota entre ellos. Sin sleep: cada VU manda la siguiente request apenas
@@ -10,7 +10,7 @@
 import http from "k6/http";
 import { check } from "k6";
 
-const BASE_URL = __ENV.BASE_URL || "http://localhost:8080";
+const BASE_URL = __ENV.BASE_URL || "http://127.0.0.1:8080";
 const NOMBRES = (
   __ENV.PDFS ||
   "01-liviano.pdf,02-texto-80-paginas.pdf,03-capas-30-paginas.pdf,04-imagenes-9mb.pdf"

@@ -9,10 +9,12 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 ETIQUETA="${1:?uso: medir.sh <etiqueta>}"
-BASE_URL="${BASE_URL:-http://localhost:8080}"
+# 127.0.0.1 y no localhost: en Windows, localhost resuelve primero a ::1 y el reenvío de
+# puertos IPv6 de Docker Desktop puede quedar colgado después de un down/up.
+BASE_URL="${BASE_URL:-http://127.0.0.1:8080}"
 mkdir -p resultados
 
-curl -fsS "$BASE_URL/health" >/dev/null || { echo "El stack no responde en $BASE_URL"; exit 1; }
+curl -fsS -m 10 "$BASE_URL/health" >/dev/null || { echo "El stack no responde en $BASE_URL"; exit 1; }
 
 echo "== k6 spike ($ETIQUETA)"
 k6 run -e BASE_URL="$BASE_URL" --summary-export "resultados/k6-$ETIQUETA.json" spike.js \
