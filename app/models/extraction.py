@@ -16,3 +16,9 @@ class PdfExtraction:
     checksum: str
     tamano_bytes: int
     paginas: int
+
+
+@dataclass(frozen=True)
+class DocumentoMarkdown:
+    content: str
+    page_count: int
