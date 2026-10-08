@@ -1,13 +1,13 @@
 # Informe técnico — TP de carga, estrés y optimización de `POST /extract`
 
 Microservicio de extracción de texto y conversión de PDF a Markdown (repo
-`Extraccion-de-texto-pdf-`, imagen `extraccion-texto:1.1.0`). Este informe explica la
+`Extraccion-de-texto-pdf-`, imagen `extraccion-texto:1.1.1`). Este informe explica la
 arquitectura, el cuello de botella, el proceso de investigación y las métricas antes y
 después de optimizar.
 
-> **Estado:** las mediciones de la sección 5 se completan con Docker en la notebook
-> (`tests/stress/medir.sh`). Lo que figura como *pendiente* todavía no se midió; los demás
-> números salen de pruebas reales que se citan con su fecha.
+> **Estado:** medido con Docker el 2026-10-07 (sección 5). Todos los números salen de
+> pruebas reales que se citan con su fecha; los resultados crudos de k6 y vegeta se
+> regeneran con `tests/stress/medir.sh`.
 
 ## 1. Qué se entrega
 
@@ -133,13 +133,14 @@ Python: pypdf con 3.12 fue ~8 % más lento que con 3.11, por eso la imagen queda
 ### 3.5 Modelo cerrado (k6) contra modelo abierto (vegeta)
 
 - **k6 spike** (cerrado): 100 VUs, cada uno espera su respuesta antes de mandar la
-  siguiente. La concurrencia nunca pasa de 100 (unas 20 por réplica), así que la cola por
-  defecto (`EXTRACT_MAX_QUEUE=20`) alcanza para **no rechazar**: el objetivo es throughput
-  con 0 % de errores.
+  siguiente. La concurrencia nunca pasa de 100 (unas 20 por réplica en promedio), así que
+  con una cola holgada no se rechaza nada: el objetivo es throughput con 0 % de errores.
+  Con la cola original de 20 sí se rechazaba (sección 5.3): el reparto no es parejo porque
+  los PDFs cuestan distinto.
 - **vegeta** (abierto): 50 req/s pase lo que pase. Si la capacidad es menor que 50/s, la
   cola crece sin límite y las requests vencen a los 30 s (le pasó a la referencia del
   profesor: 33 % de timeouts). Si la capacidad supera 50/s, no hay cola. La espera máxima
-  (`EXTRACT_QUEUE_TIMEOUT_SECONDS=10`) corta antes del timeout del cliente.
+  (`EXTRACT_QUEUE_TIMEOUT_SECONDS=25`) corta antes del timeout del cliente (30 s).
 
 ## 4. Cómo reproducirlo
 
@@ -176,41 +177,147 @@ Configuraciones de la comparación (sección 5):
 |---|---|
 | `1-replica-sin-backpressure` | `EXTRACT_MAX_QUEUE=100000 EXTRACT_QUEUE_TIMEOUT_SECONDS=3600 docker compose up --build -d --scale extraccion=1` |
 | `5-replicas-sin-backpressure` | `EXTRACT_MAX_QUEUE=100000 EXTRACT_QUEUE_TIMEOUT_SECONDS=3600 docker compose up -d` |
-| `5-replicas-backpressure` | `docker compose up -d` (valores por defecto) |
+| `5-replicas-backpressure` | `EXTRACT_MAX_QUEUE=20 EXTRACT_QUEUE_TIMEOUT_SECONDS=10 docker compose up -d` (valores por defecto hasta la 1.1.0) |
+| `final-1.1.1` | `docker compose up --build -d` (valores por defecto de la 1.1.1: cola 100, espera 25 s) |
+
+`medir.sh` apunta a `http://127.0.0.1:8080`: en Windows, `localhost` resuelve primero a
+`::1` y el reenvío de puertos IPv6 de Docker Desktop quedó colgado después de un
+`down`/`up` (le pasó a la segunda configuración).
 
 ## 5. Resultados
 
-Máquina de medición: *pendiente (notebook: CPU, núcleos, RAM, Docker Desktop)*. Todas las
-corridas con la notebook enchufada y con los mismos 4 PDFs.
+Medido el 2026-10-07 en la notebook del grupo: Intel Core i5-13420H (8 núcleos, 12 hilos),
+15,7 GB de RAM, Windows 11 Home, Docker Desktop 29.6.2 con 12 CPUs y 7,6 GiB asignados,
+enchufada. Cada réplica limitada a 1 CPU y 1 GB, el proxy a 1 CPU y 512 MB. Los 4 PDFs
+generados (sección 4.1), `EXTRACT_WORKERS=1`. Entre una configuración y otra,
+`docker compose down`.
+
+Nombres de las configuraciones:
+
+| Config. | Réplicas | Cola (`EXTRACT_MAX_QUEUE`) | Espera máx. (`EXTRACT_QUEUE_TIMEOUT_SECONDS`) |
+|---|---|---|---|
+| **A** antes | 1 | sin límite | sin límite |
+| **B** | 5 | sin límite | sin límite |
+| **C** | 5 | 20 | 10 s (valores de la 1.1.0) |
+| **D** | 5 | 40 | 10 s |
+| **E / final** | 5 | **100** | **25 s** (valores de la 1.1.1) |
 
 ### 5.1 k6 spike (100 VUs, 40 s)
 
 | Configuración | Requests | req/s | Errores | p50 | p90 | p95 | Máx |
 |---|---|---|---|---|---|---|---|
 | Referencia del profesor | 1.037 | 25,35 | 0,00 % | 1,88 s | 7,83 s | 8,80 s | 13,94 s |
-| 1 réplica, sin backpressure | *pendiente* | | | | | | |
-| 5 réplicas, sin backpressure | *pendiente* | | | | | | |
-| 5 réplicas, con backpressure | *pendiente* | | | | | | |
+| A. 1 réplica, sin backpressure | 373 | 8,21 | 0,00 % | 10,93 s | 13,26 s | 13,55 s | 13,95 s |
+| B. 5 réplicas, sin backpressure | 1.387 | 34,36 | 0,00 % | 2,22 s | 3,99 s | 4,95 s | 7,71 s |
+| C. 5 réplicas, backpressure 20 / 10 s | 1.392 | 34,66 | **3,59 %** (50 × `503`) | 1,89 s | 4,82 s | 6,03 s | 8,75 s |
+| D. 5 réplicas, backpressure 40 / 10 s | 1.383 | 34,55 | 0,00 % | 1,93 s | 4,23 s | 5,13 s | 7,79 s |
+| E. 5 réplicas, backpressure 100 / 25 s | 1.397 | 34,9 \* | 0,00 % | 2,00 s | 4,06 s | 5,29 s | 7,44 s |
+| **Final 1.1.1** (`docker compose up --build`) | **1.352** | **33,76** | **0,00 %** | **1,90 s** | **5,32 s** | **6,47 s** | **8,31 s** |
+
+\* E tuvo 1 iteración interrumpida (ver 5.3, "requests perdidas"): k6 informó 21,88 req/s
+porque esperó 30 s más a esa request. 34,9 es la cantidad de requests completadas en los
+40 s del escenario, comparable con las demás filas.
 
 ### 5.2 vegeta (50 req/s, 30 s, timeout 30 s)
 
-| Configuración | Throughput efectivo | Éxito | Timeouts (código 0) | 503 | p50 |
-|---|---|---|---|---|---|
-| Referencia del profesor | 16,65 req/s | 998 / 1.500 (66,53 %) | 501 (33,40 %) | — | 14,89 s |
-| 1 réplica, sin backpressure | *pendiente* | | | | |
-| 5 réplicas, sin backpressure | *pendiente* | | | | |
-| 5 réplicas, con backpressure | *pendiente* | | | | |
+| Configuración | Throughput efectivo | Éxito | Timeouts (código 0) | 503 | p50 | p95 |
+|---|---|---|---|---|---|---|
+| Referencia del profesor | 16,65 req/s | 998 / 1.500 (66,53 %) | 501 (33,40 %) | — | 14,89 s | — |
+| A. 1 réplica, sin backpressure | 2,72 req/s | 159 / 1.500 (10,60 %) | 31 | — (además 1.065 × `502` y 245 × `404`) | 7,24 s | 19,84 s |
+| B. 5 réplicas, sin backpressure | 33,40 req/s | 1.494 / 1.500 (99,60 %) | 6 | — | 8,54 s | 19,03 s |
+| C. 5 réplicas, backpressure 20 / 10 s | 30,49 req/s | 1.165 / 1.500 (77,67 %) | 5 | 330 | 2,95 s | 13,08 s |
+| D. 5 réplicas, backpressure 40 / 10 s | 31,08 req/s | 1.218 / 1.500 (81,20 %) | 5 | 277 | 4,97 s | 13,99 s |
+| E. 5 réplicas, backpressure 100 / 25 s | 32,55 req/s | 1.482 / 1.500 (98,80 %) | 4 | 14 | 8,58 s | 19,67 s |
+| **Final 1.1.1** | **33,24 req/s** | **1.464 / 1.500 (97,60 %)** | **5** | **31** | **7,58 s** | **19,21 s** |
+
+E se repitió y dio lo mismo (98,87 % de éxito, 14 × `503`, p50 9,28 s).
 
 ### 5.3 Análisis
 
-*Pendiente, con los números de 5.1 y 5.2.* Preguntas que tiene que responder: cuánto aporta
-cada réplica (¿escala lineal hasta 5?), si el backpressure mejora la tasa de éxito de vegeta
-o solo cambia timeouts por `503`, y si la latencia total crece con la concurrencia mientras
-`X-Extraction-Time-Ms` se mantiene (eso indica cola, no extracción lenta).
+**Contra el profesor, con la configuración final (1.1.1):**
+
+| Métrica | Profesor | Nosotros | |
+|---|---|---|---|
+| k6 req/s | 25,35 | **33,76** | +33 % |
+| k6 errores | 0,00 % | **0,00 %** | igual |
+| k6 p95 | 8,80 s | **6,47 s** | −26 % |
+| vegeta éxito | 66,53 % | **97,60 %** | +31 puntos |
+| vegeta p50 | 14,89 s | **7,58 s** | −49 % |
+| vegeta throughput efectivo | 16,65 req/s | **33,24 req/s** | ×2 |
+
+La comparación es entre máquinas distintas: la referencia se midió en la del profesor. Lo
+que no depende de la máquina es la forma de las curvas: con nuestra configuración ninguna
+request de k6 falla y vegeta casi no tiene timeouts.
+
+**Cuánto aporta cada réplica.** De 1 a 5 réplicas el throughput de k6 pasa de 8,2 a
+34,4 req/s (×4,2 con ×5 réplicas). No escala del todo lineal porque la máquina tiene 8
+núcleos físicos para 5 réplicas, el proxy, Docker Desktop y los propios k6 y vegeta. Con
+1 réplica, la latencia de k6 es casi toda cola: p50 de 10,9 s cuando convertir un PDF tarda
+entre 10 y 180 ms.
+
+**Antes (A): sin backpressure, una réplica se cae.** Con vegeta a 50 req/s y capacidad de
+~8 req/s, la cola crece sin límite y cada request retiene su PDF en memoria (hasta 9 MB).
+La réplica superó su 1 GB: Docker registró un evento `oom`, el contenedor se reinició y
+mientras tanto Traefik respondió `502` (1.065) y `404` (245, sin réplicas sanas). Solo el
+10,6 % tuvo éxito. Es exactamente el caso que el backpressure tiene que evitar.
+
+**El backpressure inicial era demasiado agresivo (C).** Con 5 réplicas la capacidad es de
+~34 req/s. Contra 50 req/s durante 30 s se juntan unas 480 requests de más, que esperan
+como mucho ~20 s: **menos que los 30 s del cliente de vegeta**. La espera máxima de 10 s
+rechazó con `503` requests que habrían llegado a tiempo: 77,7 % de éxito contra 99,6 % sin
+backpressure (B). Y en k6 la cola de 20 rechazó el 3,6 %, porque 100 VUs no se reparten
+exactamente 20 por réplica (los PDFs cuestan distinto).
+
+**Ajuste (antes → después):**
+
+1. **D:** cola de 20 a 40. k6 pasó a 0 % de errores; vegeta apenas mejoró (81,2 %), porque
+   el límite que mandaba era la espera de 10 s.
+2. **E:** cola de 100 y espera de 25 s (por debajo de los 30 s del cliente menos el tiempo
+   de conversión). k6 sigue en 0 %; vegeta sube a 98,8 % con solo 14 rechazos. Se adoptó
+   como valor por defecto en la imagen **1.1.1** (`docker-compose.yml`, `.env.example` y
+   `app/core/config.py`, con su test).
+
+El costo del ajuste es latencia en vegeta: p50 de 2,9 s (C) a 7,6 s (final), porque ahora
+se atiende lo que antes se rechazaba. Es lo correcto para este escenario: una request
+rechazada a los 10 s es trabajo perdido para el cliente, y una atendida a los 20 s llega
+antes de su timeout. La protección se mantiene: si la sobrecarga dura más que el timeout
+del cliente, la espera de 25 s y la cola de 100 cortan con `503` rápido antes de que la
+memoria se agote (el caso A).
+
+**Backpressure contra sin backpressure con 5 réplicas (B contra final).** A 50 req/s
+durante 30 s los dos andan bien (99,6 % y 97,6 %): la ráfaga no alcanza para llenar 1 GB por
+réplica. La diferencia aparece con más carga o más duración: sin límite, la cola y la memoria
+crecen sin techo (lo que tumbó a A); con límite, el servicio sigue sano y avisa con `503` y
+`Retry-After`.
+
+**Latencia total contra extracción.** Sin carga, convertir cada PDF tarda entre 10 y 180 ms
+(`X-Extraction-Time-Ms`). Bajo carga la latencia sube a segundos: es espera en cola, no
+conversión más lenta. Por eso escalar con réplicas (A → B) es lo que más mueve los números,
+y el backpressure decide qué hacer con la cola.
+
+**Corridas descartadas, con su motivo.** La primera corrida de B dio 20,09 req/s y 83,6 %
+en vegeta, con conexiones rechazadas por `127.0.0.1:8080` y 1 iteración de k6 interrumpida;
+se hizo justo después de que el reenvío de puertos de Docker Desktop se colgara. Repetida en
+limpio dio los valores de la tabla. Los resultados crudos de las dos están en
+`tests/stress/resultados/` (no se versiona).
+
+**Requests perdidas antes del servicio.** En 3 de las 8 corridas una o dos requests de k6
+quedaron sin respuesta (iteraciones interrumpidas). En la repetición de E se contó: el
+servidor registró 2.847 requests de `/extract`, y entre k6 y vegeta se mandaron 2.852. Las 5
+que faltan son justo las 2 interrumpidas de k6 y los 3 timeouts de vegeta: **nunca llegaron
+al servicio**. Se pierden en el reenvío de puertos de Docker Desktop en Windows (ver 6). No
+cambian los errores (k6 no las cuenta como fallidas) pero bajan el req/s que informa k6,
+porque espera 30 s más.
 
 ## 6. Limitaciones y deuda declarada
 
 - Los PDFs de prueba son generados; con la carpeta oficial los tiempos absolutos cambian.
+- **Docker Desktop en Windows pierde algunas conexiones bajo carga** (5 de 2.852 en una
+  corrida; sección 5.3) y el reenvío de puertos IPv6 se colgó una vez después de un
+  `down`/`up`. No es del servicio: esas requests no le llegan. En Linux, o midiendo desde un
+  contenedor en la misma red, no debería pasar; no se pudo probar en esta entrega.
+- Las mediciones son de una sola máquina y una corrida por configuración (dos en B y E):
+  sirven para comparar configuraciones, no como valores absolutos.
 - El tiempo de `X-Extraction-Time-Ms` en `/extract` incluye la espera en la cola de la
   réplica, no solo la conversión.
 - El Markdown es simple (encabezado por página y texto plano): no detecta títulos, listas
