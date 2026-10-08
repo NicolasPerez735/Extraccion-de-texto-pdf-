@@ -2,7 +2,8 @@
 
 Microservicio de extracción de texto de documentos PDF del proyecto
 `microservicios-pdf`. Implementa la sección `extraccion-texto` del contrato
-compartido `microservicios-pdf` (versión 1.2.0, en el repo `integracion`).
+compartido `microservicios-pdf` (versión 1.3.0, en el repo `integracion`), y el endpoint
+`POST /extract` del TP de carga y estrés (ver [TP de carga](#tp-de-carga-post-extract)).
 
 ## Responsabilidad
 
@@ -13,6 +14,7 @@ Hace:
 - Contar las páginas.
 - Calcular el checksum SHA-256 del archivo.
 - Propagar `X-Correlation-ID` y registrarlo en cada línea de log.
+- TP de carga: convertir un PDF binario a Markdown con PyMuPDF (`POST /extract`).
 
 No hace:
 
@@ -25,6 +27,7 @@ No hace:
 | Método | Ruta | Descripción |
 | --- | --- | --- |
 | `POST` | `/extraer` | Extrae texto, páginas y checksum de un PDF en Base64. |
+| `POST` | `/extract` | TP de carga: PDF binario en el body → `{"content": <Markdown>, "page_count": N}`. |
 | `GET` | `/health` | Healthcheck del servicio. |
 
 La documentación interactiva queda disponible en `http://127.0.0.1:8000/docs`.
@@ -187,22 +190,52 @@ Copiar `.env.example` como `.env`. No se versionan secretos.
 | Variable | Predeterminado | Descripción |
 | --- | --- | --- |
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING` o `ERROR`. Otro valor impide arrancar. |
+| `EXTRACT_WORKERS` | `1` | Procesos que convierten a Markdown en cada réplica (`/extract`). |
+| `EXTRACT_MAX_QUEUE` | `20` | Requests de `/extract` que pueden esperar un worker; más → `503`. |
+| `EXTRACT_QUEUE_TIMEOUT_SECONDS` | `10` | Espera máxima por un worker; más → `503`. |
+| `PUERTO` | `8080` | Solo `docker-compose.yml`: puerto del host donde publica el proxy. |
 
-`LOG_LEVEL` es la única variable del servicio (contrato 1.2.0).
+Las tres `EXTRACT_*` son opcionales y solo afectan a `/extract` (contrato 1.3.0).
 
 ## Docker
 
 ```powershell
-docker build -t extraccion-texto:1.0.4 .
-docker run --rm -p 8000:8000 extraccion-texto:1.0.4
+docker build -t extraccion-texto:1.1.0 .
+docker run --rm -p 8000:8000 extraccion-texto:1.1.0
 ```
 
-La versión del servicio es la de `pyproject.toml` (1.0.4): es la que muestra Swagger en
+La versión del servicio es la de `pyproject.toml` (1.1.0): es la que muestra Swagger en
 `/docs` y el tag de la imagen. `tests/integration/test_openapi.py` verifica que
 `FastAPI(version=...)` en `app/main.py` coincida con `pyproject.toml`; en una versión
 nueva se cambian los dos.
 
 La imagen corre como `appuser` y tiene un `HEALTHCHECK` contra `GET /health`.
+
+## TP de carga (`POST /extract`)
+
+Trabajo práctico de carga, estrés y optimización. El informe técnico (arquitectura, cuello
+de botella, proceso de investigación y métricas antes y después) está en
+[docs/informe-carga.md](docs/informe-carga.md).
+
+```bash
+uv run tests/stress/generar_pdfs.py               # o copiar la carpeta oficial en tests/stress/pdfs/
+docker compose up --build                         # 5 réplicas + Traefik en http://localhost:8080
+k6 run tests/stress/spike.js                      # spike: 100 VUs, 40 s
+./tests/stress/run_vegeta.sh                      # carga fija: 50 req/s, 30 s, timeout 30 s
+./tests/stress/medir.sh <etiqueta>                # las dos, con resultados en tests/stress/resultados/
+```
+
+Ejemplo con curl:
+
+```bash
+curl -X POST http://localhost:8080/extract -H "Content-Type: application/pdf"      --data-binary @tests/stress/pdfs/01-liviano.pdf
+```
+
+- PyMuPDF convierte en un pool de procesos, separado del event loop de FastAPI.
+- Backpressure: con la cola llena o la espera vencida responde enseguida
+  `503 DEPENDENCY_UNAVAILABLE` con `details.reason` y `Retry-After: 1`.
+- Cada contenedor del `docker-compose.yml` tiene límite de CPU y memoria (1 CPU y 1 GB por
+  réplica; 1 CPU y 512 MB el proxy).
 
 ## Tests y calidad
 
