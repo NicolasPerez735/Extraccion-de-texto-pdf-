@@ -27,7 +27,13 @@ def test_the_conversion_runs_in_another_process(make_pdf) -> None:
     # viajar entre procesos (pickle).
     async def convertir_en_otro_proceso():
         with ProcessPoolExecutor(max_workers=1) as executor:
-            converter = PoolMarkdownConverter(pdf_a_markdown, executor)
+            converter = PoolMarkdownConverter(
+                pdf_a_markdown,
+                executor,
+                en_paralelo=1,
+                cola_maxima=1,
+                espera_maxima_segundos=10,
+            )
             documento = await converter.convertir(make_pdf("Hola"))
             with pytest.raises(PdfCorruptedError):
                 await converter.convertir(b"%PDF-1.4\nbasura")
