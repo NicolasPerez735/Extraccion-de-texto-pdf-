@@ -193,9 +193,14 @@ Copiar `.env.example` como `.env`. No se versionan secretos.
 ## Docker
 
 ```powershell
-docker build -t extraccion-texto:1.0.3 .
-docker run --rm -p 8000:8000 extraccion-texto:1.0.3
+docker build -t extraccion-texto:1.0.4 .
+docker run --rm -p 8000:8000 extraccion-texto:1.0.4
 ```
+
+La versión del servicio es la de `pyproject.toml` (1.0.4): es la que muestra Swagger en
+`/docs` y el tag de la imagen. `tests/integration/test_openapi.py` verifica que
+`FastAPI(version=...)` en `app/main.py` coincida con `pyproject.toml`; en una versión
+nueva se cambian los dos.
 
 La imagen corre como `appuser` y tiene un `HEALTHCHECK` contra `GET /health`.
 
