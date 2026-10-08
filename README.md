@@ -191,8 +191,8 @@ Copiar `.env.example` como `.env`. No se versionan secretos.
 | --- | --- | --- |
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING` o `ERROR`. Otro valor impide arrancar. |
 | `EXTRACT_WORKERS` | `1` | Procesos que convierten a Markdown en cada réplica (`/extract`). |
-| `EXTRACT_MAX_QUEUE` | `20` | Requests de `/extract` que pueden esperar un worker; más → `503`. |
-| `EXTRACT_QUEUE_TIMEOUT_SECONDS` | `10` | Espera máxima por un worker; más → `503`. |
+| `EXTRACT_MAX_QUEUE` | `100` | Requests de `/extract` que pueden esperar un worker; más → `503`. |
+| `EXTRACT_QUEUE_TIMEOUT_SECONDS` | `25` | Espera máxima por un worker; más → `503`. |
 | `PUERTO` | `8080` | Solo `docker-compose.yml`: puerto del host donde publica el proxy. |
 
 Las tres `EXTRACT_*` son opcionales y solo afectan a `/extract` (contrato 1.3.0).
