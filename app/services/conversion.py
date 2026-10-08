@@ -2,8 +2,8 @@
 
 import logging
 
-from app.core.exceptions import PdfInvalidError
 from app.models.extraction import DocumentoMarkdown
+from app.services.firma_pdf import validar_firma_pdf
 from app.services.markdown_converter import MarkdownConverter
 
 logger = logging.getLogger(__name__)
@@ -16,8 +16,7 @@ class ConversionService:
         self._converter = converter
 
     async def convertir(self, contenido: bytes) -> DocumentoMarkdown:
-        if not contenido.startswith(b"%PDF"):
-            raise PdfInvalidError("El archivo no es un PDF válido.")
+        validar_firma_pdf(contenido)
         documento = await self._converter.convertir(contenido)
         # Sin el texto (contrato 1.2.0): solo cantidades.
         logger.info(
