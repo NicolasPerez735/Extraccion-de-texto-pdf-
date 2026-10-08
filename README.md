@@ -191,8 +191,8 @@ Copiar `.env.example` como `.env`. No se versionan secretos.
 | --- | --- | --- |
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING` o `ERROR`. Otro valor impide arrancar. |
 | `EXTRACT_WORKERS` | `1` | Procesos que convierten a Markdown en cada réplica (`/extract`). |
-| `EXTRACT_MAX_QUEUE` | `20` | Requests de `/extract` que pueden esperar un worker; más → `503`. |
-| `EXTRACT_QUEUE_TIMEOUT_SECONDS` | `10` | Espera máxima por un worker; más → `503`. |
+| `EXTRACT_MAX_QUEUE` | `100` | Requests de `/extract` que pueden esperar un worker; más → `503`. |
+| `EXTRACT_QUEUE_TIMEOUT_SECONDS` | `25` | Espera máxima por un worker; más → `503`. |
 | `PUERTO` | `8080` | Solo `docker-compose.yml`: puerto del host donde publica el proxy. |
 
 Las tres `EXTRACT_*` son opcionales y solo afectan a `/extract` (contrato 1.3.0).
@@ -200,11 +200,11 @@ Las tres `EXTRACT_*` son opcionales y solo afectan a `/extract` (contrato 1.3.0)
 ## Docker
 
 ```powershell
-docker build -t extraccion-texto:1.1.0 .
-docker run --rm -p 8000:8000 extraccion-texto:1.1.0
+docker build -t extraccion-texto:1.1.1 .
+docker run --rm -p 8000:8000 extraccion-texto:1.1.1
 ```
 
-La versión del servicio es la de `pyproject.toml` (1.1.0): es la que muestra Swagger en
+La versión del servicio es la de `pyproject.toml` (1.1.1): es la que muestra Swagger en
 `/docs` y el tag de la imagen. `tests/integration/test_openapi.py` verifica que
 `FastAPI(version=...)` en `app/main.py` coincida con `pyproject.toml`; en una versión
 nueva se cambian los dos.

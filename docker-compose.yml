@@ -11,12 +11,12 @@ name: extraccion-tp-carga
 services:
   extraccion:
     build: .
-    image: extraccion-texto:1.1.0
+    image: extraccion-texto:1.1.1
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       EXTRACT_WORKERS: ${EXTRACT_WORKERS:-1}
-      EXTRACT_MAX_QUEUE: ${EXTRACT_MAX_QUEUE:-20}
-      EXTRACT_QUEUE_TIMEOUT_SECONDS: ${EXTRACT_QUEUE_TIMEOUT_SECONDS:-10}
+      EXTRACT_MAX_QUEUE: ${EXTRACT_MAX_QUEUE:-100}
+      EXTRACT_QUEUE_TIMEOUT_SECONDS: ${EXTRACT_QUEUE_TIMEOUT_SECONDS:-25}
     deploy:
       replicas: 5
       resources:

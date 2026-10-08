@@ -12,8 +12,8 @@ class Settings(BaseSettings):
     # Procesos que convierten PDF a Markdown en cada réplica (POST /extract).
     extract_workers: int = Field(default=1, ge=1)
     # Backpressure: requests que pueden esperar un worker y cuánto tiempo.
-    extract_max_queue: int = Field(default=20, ge=0)
-    extract_queue_timeout_seconds: float = Field(default=10, gt=0)
+    extract_max_queue: int = Field(default=100, ge=0)
+    extract_queue_timeout_seconds: float = Field(default=25, gt=0)
 
     model_config = SettingsConfigDict(
         env_file=".env",

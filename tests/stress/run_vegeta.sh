@@ -3,14 +3,14 @@
 # POST /extract, rotando los PDFs de tests/stress/pdfs/, con timeout de cliente de 30 s.
 #
 #   ./tests/stress/run_vegeta.sh
-#   BASE_URL=http://localhost:8080 TASA=50 DURACION=30s ./tests/stress/run_vegeta.sh
+#   BASE_URL=http://127.0.0.1:8080 TASA=50 DURACION=30s ./tests/stress/run_vegeta.sh
 #
 # Deja el binario de resultados en tests/stress/resultados/ para volver a sacar reportes:
 #   vegeta report -type=json < tests/stress/resultados/vegeta-<fecha>.bin
 set -euo pipefail
 
 cd "$(dirname "$0")"
-BASE_URL="${BASE_URL:-http://localhost:8080}"
+BASE_URL="${BASE_URL:-http://127.0.0.1:8080}"
 TASA="${TASA:-50}"
 DURACION="${DURACION:-30s}"
 TIMEOUT="${TIMEOUT:-30s}"
