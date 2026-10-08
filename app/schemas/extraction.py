@@ -14,3 +14,10 @@ class ExtractionResponse(BaseModel):
     checksum: str
     tamano_bytes: int
     paginas: int
+
+
+class MarkdownResponse(BaseModel):
+    """Respuesta de POST /extract (TP de carga)."""
+
+    content: str
+    page_count: int

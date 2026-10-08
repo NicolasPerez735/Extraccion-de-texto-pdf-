@@ -7,6 +7,7 @@ import logging
 
 from app.core.exceptions import PdfInvalidError
 from app.models.extraction import PdfExtraction
+from app.services.firma_pdf import validar_firma_pdf
 from app.services.text_extractor import TextExtractor
 
 logger = logging.getLogger(__name__)
@@ -17,8 +18,7 @@ def _decodificar_pdf(archivo_base64: str) -> bytes:
         contenido = base64.b64decode("".join(archivo_base64.split()), validate=True)
     except (ValueError, binascii.Error) as error:
         raise PdfInvalidError("El archivo no es un PDF válido.") from error
-    if not contenido.startswith(b"%PDF"):
-        raise PdfInvalidError("El archivo no es un PDF válido.")
+    validar_firma_pdf(contenido)
     return contenido
 
 

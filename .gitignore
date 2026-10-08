@@ -10,3 +10,7 @@ dist/
 build/
 *.egg-info/
 Contexto/
+
+# TP de carga: PDFs generados (o la carpeta oficial) y resultados de k6 y vegeta.
+tests/stress/pdfs/*.pdf
+tests/stress/resultados/
