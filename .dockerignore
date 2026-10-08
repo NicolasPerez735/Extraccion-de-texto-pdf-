@@ -12,3 +12,5 @@ dist/
 build/
 *.egg-info/
 Contexto/
+tests/stress/pdfs/
+tests/stress/resultados/

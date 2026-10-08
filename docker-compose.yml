@@ -1,0 +1,67 @@
+# TP de carga y estrés: POST /extract con 5 réplicas detrás de Traefik.
+#
+#   docker compose up --build          → http://localhost:8080/extract
+#   docker compose up --build --scale extraccion=1   (medición con una sola réplica)
+#
+# Cada contenedor tiene un límite explícito de CPU y memoria (condición del TP para que
+# las mediciones sean comparables). La configuración sale de variables de entorno
+# (12-Factor III); los valores por defecto están en .env.example.
+name: extraccion-tp-carga
+
+services:
+  extraccion:
+    build: .
+    image: extraccion-texto:1.1.0
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      EXTRACT_WORKERS: ${EXTRACT_WORKERS:-1}
+      EXTRACT_MAX_QUEUE: ${EXTRACT_MAX_QUEUE:-20}
+      EXTRACT_QUEUE_TIMEOUT_SECONDS: ${EXTRACT_QUEUE_TIMEOUT_SECONDS:-10}
+    deploy:
+      replicas: 5
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    # El healthcheck es el del Dockerfile; acá solo se acorta el intervalo para que
+    # Traefik empiece a mandarle tráfico a cada réplica apenas está lista.
+    healthcheck:
+      interval: 5s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.extraccion.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.extraccion.entrypoints=web"
+      - "traefik.http.services.extraccion.loadbalancer.server.port=8000"
+    # Mayor que los 30 s de --timeout-graceful-shutdown (12-Factor IX).
+    stop_grace_period: 40s
+    restart: unless-stopped
+
+  # Proxy inverso: reparte por request (round robin) entre las réplicas sanas.
+  proxy:
+    image: traefik:v3.6
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedByDefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--ping=true"
+      - "--log.level=WARN"
+    ports:
+      - "${PUERTO:-8080}:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      extraccion:
+        condition: service_healthy
+    restart: unless-stopped
