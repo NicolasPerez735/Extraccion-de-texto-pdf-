@@ -1,17 +1,9 @@
-"""POST /extract (TP de carga): PDF binario en el body → Markdown y cantidad de páginas.
-
-El conversor real (PyMuPDF) corre en un pool de threads en lugar del de procesos de
-producción: mismo código de conversión, sin levantar procesos en cada test."""
-
-from concurrent.futures import ThreadPoolExecutor
+"""POST /extract (TP de carga): PDF binario en el body → Markdown y páginas."""
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.core.composition import get_conversion_service
-from app.core.exceptions import ServiceOverloadedError
-from app.core.pool_lector import PoolLectorPaginas
-from app.core.pymupdf_paginas import leer_paginas
 from app.main import app
 from app.services.conversion import ConversionService
 
@@ -19,28 +11,17 @@ PDF_HEADERS = {"Content-Type": "application/pdf"}
 
 
 @pytest.fixture
-def extract_client():
-    lector = PoolLectorPaginas(
-        leer_paginas,
-        ThreadPoolExecutor(max_workers=1),
-        en_paralelo=1,
-        cola_maxima=4,
-        espera_maxima_segundos=10,
-    )
+def extract_client(lector):
     service = ConversionService(lector)
     app.dependency_overrides[get_conversion_service] = lambda: service
     yield TestClient(app)
     app.dependency_overrides.clear()
-    lector.cerrar()
 
 
-class LectorSaturado:
-    async def leer(self, contenido: bytes) -> list[str]:
-        raise ServiceOverloadedError("cola_llena")
-
-
-def test_extract_responds_503_quickly_when_the_service_is_saturated(make_pdf) -> None:
-    service = ConversionService(LectorSaturado())
+def test_extract_responds_503_quickly_when_the_service_is_saturated(
+    lector_saturado, make_pdf
+) -> None:
+    service = ConversionService(lector_saturado)
     app.dependency_overrides[get_conversion_service] = lambda: service
     try:
         response = TestClient(app).post(

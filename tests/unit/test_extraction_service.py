@@ -1,48 +1,60 @@
+import asyncio
 import base64
 import hashlib
 
 import pytest
 
 from app.core.exceptions import PdfInvalidError
-from app.models.extraction import TextoExtraido
 from app.services.extraction import ExtractionService
 
 PDF_CONTENT = b"%PDF-1.4\ncontenido\n%%EOF"
 
 
-class StubExtractor:
-    def __init__(self, texto: str = "Texto extraído", paginas: int = 3) -> None:
-        self.content: bytes | None = None
-        self._resultado = TextoExtraido(texto=texto, paginas=paginas)
+class StubLector:
+    def __init__(self, paginas: list[str] | None = None) -> None:
+        self.contenido: bytes | None = None
+        self._paginas = paginas if paginas is not None else ["Texto extraído"] * 3
 
-    def extract(self, content: bytes) -> TextoExtraido:
-        self.content = content
-        return self._resultado
+    async def leer(self, contenido: bytes) -> list[str]:
+        self.contenido = contenido
+        return self._paginas
 
 
 def encode(content: bytes) -> str:
     return base64.b64encode(content).decode("ascii")
 
 
-def test_extraer_returns_the_contract_fields() -> None:
-    service = ExtractionService(StubExtractor())
+def extraer(service: ExtractionService, archivo_base64: str):
+    return asyncio.run(service.extraer(archivo_base64, "contrato.pdf"))
 
-    result = service.extraer(encode(PDF_CONTENT), "contrato.pdf")
+
+def test_extraer_returns_the_contract_fields() -> None:
+    service = ExtractionService(StubLector(["Texto extraído"]))
+
+    result = extraer(service, encode(PDF_CONTENT))
 
     assert result.nombre == "contrato.pdf"
     assert result.texto == "Texto extraído"
     assert result.checksum == hashlib.sha256(PDF_CONTENT).hexdigest()
     assert result.tamano_bytes == len(PDF_CONTENT)
+    assert result.paginas == 1
+
+
+def test_extraer_joins_the_pages_with_text_and_counts_them_all() -> None:
+    service = ExtractionService(StubLector(["Hola", "", "Chau"]))
+
+    result = extraer(service, encode(PDF_CONTENT))
+
+    assert result.texto == "Hola\nChau"
     assert result.paginas == 3
 
 
-def test_extraer_passes_the_decoded_bytes_to_the_extractor() -> None:
-    extractor = StubExtractor()
-    service = ExtractionService(extractor)
+def test_extraer_passes_the_decoded_bytes_to_the_reader() -> None:
+    lector = StubLector()
 
-    service.extraer(encode(PDF_CONTENT), "contrato.pdf")
+    extraer(ExtractionService(lector), encode(PDF_CONTENT))
 
-    assert extractor.content == PDF_CONTENT
+    assert lector.contenido == PDF_CONTENT
 
 
 @pytest.mark.parametrize(
@@ -54,16 +66,18 @@ def test_extraer_passes_the_decoded_bytes_to_the_extractor() -> None:
     ],
 )
 def test_extraer_rejects_content_that_is_not_a_pdf(archivo_base64: str) -> None:
-    service = ExtractionService(StubExtractor())
+    lector = StubLector()
 
     with pytest.raises(PdfInvalidError):
-        service.extraer(archivo_base64, "contrato.pdf")
+        extraer(ExtractionService(lector), archivo_base64)
+
+    assert lector.contenido is None
 
 
 def test_extraer_accepts_base64_with_line_breaks() -> None:
-    extractor = StubExtractor()
+    lector = StubLector()
     wrapped = base64.encodebytes(PDF_CONTENT).decode("ascii")
 
-    ExtractionService(extractor).extraer(wrapped, "contrato.pdf")
+    extraer(ExtractionService(lector), wrapped)
 
-    assert extractor.content == PDF_CONTENT
+    assert lector.contenido == PDF_CONTENT

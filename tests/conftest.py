@@ -1,10 +1,15 @@
 import base64
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.core.composition import get_extraction_service
+from app.core.exceptions import ServiceOverloadedError
+from app.core.pool_lector import PoolLectorPaginas
+from app.core.pymupdf_paginas import leer_paginas
 from app.main import app
+from app.services.extraction import ExtractionService
 
 
 def build_pdf(*page_texts: str) -> bytes:
@@ -52,8 +57,38 @@ def encode(content: bytes) -> str:
 
 
 @pytest.fixture
-def client() -> TestClient:
-    return TestClient(app)
+def lector():
+    """El lector real (PyMuPDF) en un pool de threads en lugar del de procesos de
+    producción: mismo código de lectura, sin levantar procesos en cada test."""
+    lector = PoolLectorPaginas(
+        leer_paginas,
+        ThreadPoolExecutor(max_workers=1),
+        en_paralelo=1,
+        cola_maxima=4,
+        espera_maxima_segundos=10,
+    )
+    yield lector
+    lector.cerrar()
+
+
+@pytest.fixture
+def client(lector):
+    service = ExtractionService(lector)
+    app.dependency_overrides[get_extraction_service] = lambda: service
+    yield TestClient(app)
+    app.dependency_overrides.clear()
+
+
+class LectorSaturado:
+    """Doble de test: el pool rechaza por backpressure."""
+
+    async def leer(self, contenido: bytes) -> list[str]:
+        raise ServiceOverloadedError("cola_llena")
+
+
+@pytest.fixture
+def lector_saturado() -> LectorSaturado:
+    return LectorSaturado()
 
 
 @pytest.fixture
@@ -74,7 +109,7 @@ def pdf_request(pdf_bytes: bytes) -> dict[str, str]:
 class ServicioQueFalla:
     """Doble de test: simula un error no previsto dentro del servicio."""
 
-    def extraer(self, archivo_base64: str, nombre: str):
+    async def extraer(self, archivo_base64: str, nombre: str):
         raise RuntimeError("falla inesperada")
 
 

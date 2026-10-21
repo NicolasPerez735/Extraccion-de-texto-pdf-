@@ -5,6 +5,10 @@ import logging
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.composition import get_extraction_service
+from app.main import app
+from app.services.extraction import ExtractionService
+
 
 def encode(content: bytes) -> str:
     return base64.b64encode(content).decode("ascii")
@@ -82,6 +86,24 @@ def test_corrupted_pdf_returns_pdf_corrupted(client: TestClient) -> None:
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "PDF_CORRUPTED"
+
+
+def test_extraer_responds_503_quickly_when_the_service_is_saturated(
+    lector_saturado, pdf_request: dict[str, str]
+) -> None:
+    # El mismo backpressure que /extract: el pool es compartido.
+    service = ExtractionService(lector_saturado)
+    app.dependency_overrides[get_extraction_service] = lambda: service
+    try:
+        response = TestClient(app).post("/extraer", json=pdf_request)
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 503
+    assert response.headers["Retry-After"] == "1"
+    error = response.json()["error"]
+    assert error["code"] == "DEPENDENCY_UNAVAILABLE"
+    assert error["details"] == {"reason": "cola_llena"}
 
 
 def test_pdf_without_text_returns_empty_text(client: TestClient, make_pdf) -> None:
