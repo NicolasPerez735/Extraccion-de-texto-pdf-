@@ -88,6 +88,19 @@ def test_corrupted_pdf_returns_pdf_corrupted(client: TestClient) -> None:
     assert response.json()["error"]["code"] == "PDF_CORRUPTED"
 
 
+def test_pdf_whose_pages_cannot_be_read_returns_pdf_corrupted(
+    client: TestClient, make_pdf
+) -> None:
+    pdf = make_pdf("Hola").replace(b"/Pages 2 0 R", b"/Pages 9 0 R")
+
+    response = client.post(
+        "/extraer", json={"archivo_base64": encode(pdf), "nombre": "roto.pdf"}
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "PDF_CORRUPTED"
+
+
 def test_extraer_responds_503_quickly_when_the_service_is_saturated(
     lector_saturado, pdf_request: dict[str, str]
 ) -> None:

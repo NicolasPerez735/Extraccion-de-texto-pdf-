@@ -21,6 +21,15 @@ def test_leer_paginas_raises_pdf_corrupted_when_mupdf_cannot_open_it() -> None:
         leer_paginas(b"%PDF-1.4\nbasura")
 
 
+def test_leer_paginas_raises_pdf_corrupted_when_there_are_no_pages(make_pdf) -> None:
+    # Abre bien, pero el catálogo apunta a un árbol de páginas inexistente: MuPDF lo
+    # lee como un documento de 0 páginas en lugar de fallar.
+    pdf = make_pdf("Hola").replace(b"/Pages 2 0 R", b"/Pages 9 0 R")
+
+    with pytest.raises(PdfCorruptedError):
+        leer_paginas(pdf)
+
+
 def test_the_reading_runs_in_another_process(make_pdf) -> None:
     # Producción usa un pool de procesos: la función y sus errores tienen que poder
     # viajar entre procesos (pickle).
