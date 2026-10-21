@@ -10,8 +10,8 @@ from fastapi.testclient import TestClient
 
 from app.core.composition import get_conversion_service
 from app.core.exceptions import ServiceOverloadedError
-from app.core.pool_markdown_converter import PoolMarkdownConverter
-from app.core.pymupdf_markdown import pdf_a_markdown
+from app.core.pool_lector import PoolLectorPaginas
+from app.core.pymupdf_paginas import leer_paginas
 from app.main import app
 from app.services.conversion import ConversionService
 
@@ -20,27 +20,27 @@ PDF_HEADERS = {"Content-Type": "application/pdf"}
 
 @pytest.fixture
 def extract_client():
-    converter = PoolMarkdownConverter(
-        pdf_a_markdown,
+    lector = PoolLectorPaginas(
+        leer_paginas,
         ThreadPoolExecutor(max_workers=1),
         en_paralelo=1,
         cola_maxima=4,
         espera_maxima_segundos=10,
     )
-    service = ConversionService(converter)
+    service = ConversionService(lector)
     app.dependency_overrides[get_conversion_service] = lambda: service
     yield TestClient(app)
     app.dependency_overrides.clear()
-    converter.cerrar()
+    lector.cerrar()
 
 
-class ConversorSaturado:
-    async def convertir(self, contenido: bytes):
+class LectorSaturado:
+    async def leer(self, contenido: bytes) -> list[str]:
         raise ServiceOverloadedError("cola_llena")
 
 
 def test_extract_responds_503_quickly_when_the_service_is_saturated(make_pdf) -> None:
-    service = ConversionService(ConversorSaturado())
+    service = ConversionService(LectorSaturado())
     app.dependency_overrides[get_conversion_service] = lambda: service
     try:
         response = TestClient(app).post(

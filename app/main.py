@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 
 from app.controllers.extraction import router as extraction_router
 from app.controllers.health import router as health_router
-from app.core.composition import crear_convertidor
+from app.core.composition import crear_lector
 from app.core.config import get_settings
 from app.core.exceptions import DomainError, ServiceOverloadedError
 from app.core.logs import configurar_logs, correlation_id_actual
@@ -25,13 +25,13 @@ logger = logging.getLogger("extraccion_texto")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    app.state.convertidor = crear_convertidor(get_settings())
+    app.state.lector = crear_lector(get_settings())
     logger.info("servicio iniciado")
     yield
     # uvicorn llega acá ante SIGTERM, después de cerrar el puerto y terminar las
     # requests en curso (12-Factor IX). Cierra el pool de workers de /extract.
     logger.info("apagado iniciado")
-    app.state.convertidor.cerrar()
+    app.state.lector.cerrar()
     logger.info("apagado completo")
 
 

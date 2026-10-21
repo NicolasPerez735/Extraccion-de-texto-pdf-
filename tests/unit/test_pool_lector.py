@@ -9,8 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from app.core.exceptions import ServiceOverloadedError
-from app.core.pool_markdown_converter import PoolMarkdownConverter
-from app.models.extraction import DocumentoMarkdown
+from app.core.pool_lector import PoolLectorPaginas
 
 
 class ConversionBloqueada:
@@ -19,13 +18,13 @@ class ConversionBloqueada:
     def __init__(self) -> None:
         self.liberar = threading.Event()
 
-    def __call__(self, contenido: bytes) -> DocumentoMarkdown:
+    def __call__(self, contenido: bytes) -> list[str]:
         self.liberar.wait(timeout=5)
-        return DocumentoMarkdown(content="listo", page_count=1)
+        return ["listo"]
 
 
-def armar(conversion, cola_maxima: int, espera_maxima: float) -> PoolMarkdownConverter:
-    return PoolMarkdownConverter(
+def armar(conversion, cola_maxima: int, espera_maxima: float) -> PoolLectorPaginas:
+    return PoolLectorPaginas(
         conversion,
         ThreadPoolExecutor(max_workers=1),
         en_paralelo=1,
@@ -39,10 +38,10 @@ def rechazo_mientras_hay_una_en_curso(cola_maxima: int, espera_maxima: float):
     conversor = armar(conversion, cola_maxima, espera_maxima)
 
     async def escenario() -> ServiceOverloadedError:
-        primera = asyncio.create_task(conversor.convertir(b"a"))
+        primera = asyncio.create_task(conversor.leer(b"a"))
         await asyncio.sleep(0.01)  # la primera ocupa el único lugar
         with pytest.raises(ServiceOverloadedError) as error:
-            await conversor.convertir(b"b")
+            await conversor.leer(b"b")
         conversion.liberar.set()
         await primera
         return error.value
@@ -70,8 +69,8 @@ def test_atiende_al_que_espera_cuando_se_libera_un_lugar() -> None:
     conversor = armar(conversion, cola_maxima=1, espera_maxima=5)
 
     async def escenario():
-        primera = asyncio.create_task(conversor.convertir(b"a"))
-        segunda = asyncio.create_task(conversor.convertir(b"b"))
+        primera = asyncio.create_task(conversor.leer(b"a"))
+        segunda = asyncio.create_task(conversor.leer(b"b"))
         await asyncio.sleep(0.01)
         conversion.liberar.set()
         return await asyncio.gather(primera, segunda)
@@ -81,4 +80,4 @@ def test_atiende_al_que_espera_cuando_se_libera_un_lugar() -> None:
     finally:
         conversor.cerrar()
 
-    assert [documento.content for documento in resultados] == ["listo", "listo"]
+    assert resultados == [["listo"], ["listo"]]
