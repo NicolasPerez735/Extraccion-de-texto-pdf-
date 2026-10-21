@@ -317,9 +317,14 @@ porque espera 30 s más.
   corrida; sección 5.3) y el reenvío de puertos IPv6 se colgó una vez después de un
   `down`/`up`. No es del servicio: esas requests no le llegan. **No es solo el reenvío de
   puertos del host:** en la integración (2026-10-21, 10 020 requests por el orquestador)
-  3 llamadas `orquestador → traefik-interno → /extraer` tampoco llegaron a ninguna réplica,
-  todas dentro de la red `redutn`; el reintento del orquestador las cubrió a los 10 s. No se
-  pudo ubicar el tramo (sin access log en `traefik-interno`). En Linux no se probó.
+  3 llamadas `orquestador → traefik-interno → /extraer` tampoco llegaron a la réplica,
+  todas dentro de la red `redutn`; el reintento del orquestador las cubrió a los 10 s. Con
+  el access log de `traefik-interno` se ubicaron: Traefik las mandaba a una réplica por una
+  conexión keep-alive que uvicorn cerraba en ese momento (uvicorn cierra las ociosas a los
+  5 s; Traefik las guardaba 90 s). Con `idleConnTimeout: 4s` en `traefik-interno` quedaron en
+  0 de 14.520 (README de `integracion`, "Requests perdidas hacia extracción"). Es probable
+  que las pérdidas del TP sean la misma carrera entre el proxy y uvicorn, pero no se midió.
+  En Linux no se probó.
 - Las mediciones son de una sola máquina y una corrida por configuración (dos en B y E):
   sirven para comparar configuraciones, no como valores absolutos.
 - El tiempo de `X-Extraction-Time-Ms` en `/extract` incluye la espera en la cola de la
@@ -338,4 +343,5 @@ porque espera 30 s más.
     activarse; se verificó forzándolo con una cola de 5 (503 en 45 ms y sin reintento).
   - El WARNING del `503` por saturación no registraba `details.reason` (`cola_llena` o
     `espera_agotada`), solo la respuesta lo traía. Arreglado en la 1.2.1: la línea de log
-    termina en `reason=<motivo>`.
+    termina en `reason=<motivo>`. Verificado en el stack (backpressure forzado, cola 5):
+    517 rechazos en `WARNING` con `reason=cola_llena`.
