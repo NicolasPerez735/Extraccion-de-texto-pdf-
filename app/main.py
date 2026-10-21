@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="PDF Extraction",
-    version="1.2.0",
+    version="1.2.1",
     lifespan=lifespan,
 )
 

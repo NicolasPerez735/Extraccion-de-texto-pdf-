@@ -222,11 +222,11 @@ Las tres `EXTRACT_*` son opcionales y, desde el contrato 1.4.0, rigen para `/ext
 ## Docker
 
 ```powershell
-docker build -t extraccion-texto:1.2.0 .
-docker run --rm -p 8000:8000 extraccion-texto:1.2.0
+docker build -t extraccion-texto:1.2.1 .
+docker run --rm -p 8000:8000 extraccion-texto:1.2.1
 ```
 
-La versión del servicio es la de `pyproject.toml` (1.2.0): es la que muestra Swagger en
+La versión del servicio es la de `pyproject.toml` (1.2.1): es la que muestra Swagger en
 `/docs` y el tag de la imagen. `tests/integration/test_openapi.py` verifica que
 `FastAPI(version=...)` en `app/main.py` coincida con `pyproject.toml`; en una versión
 nueva se cambian los dos.
