@@ -119,8 +119,9 @@ Python: pypdf con 3.12 fue ~8 % más lento que con 3.11, por eso la imagen queda
 
 ### 3.4 Separar HTTP de la extracción y controlar la congestión
 
-- El endpoint anterior (`/extraer`) corría pypdf en el *threadpool* de FastAPI: no bloquea
-  el event loop, pero los threads compiten por el GIL. `/extract` usa un **pool de
+- El endpoint anterior (`/extraer`, hasta la 1.1.2) corría pypdf en el *threadpool* de
+  FastAPI: no bloquea el event loop, pero los threads compiten por el GIL. `/extract` usa
+  un **pool de
   procesos**: el event loop queda libre para aceptar, rechazar y responder `/health`
   mientras la CPU convierte.
 - **Backpressure** probado sin Docker (2026-10-07, 1 worker, cola 2): 40 requests
@@ -322,5 +323,6 @@ porque espera 30 s más.
   réplica, no solo la conversión.
 - El Markdown es simple (encabezado por página y texto plano): no detecta títulos, listas
   ni tablas. Una conversión más fiel (por ejemplo `pymupdf4llm`) cuesta bastante más CPU.
-- `/extraer` (el endpoint del orquestador) sigue con pypdf, como fija el contrato; pasarlo a
-  PyMuPDF sería una versión nueva del contrato.
+- Desde la versión 1.2.0 (contrato 1.4.0) `/extraer`, el endpoint del orquestador, también
+  usa PyMuPDF y el mismo pool con backpressure. Las mediciones de este informe son de
+  `/extract`; la del flujo completo por el orquestador queda en el README de `integracion`.

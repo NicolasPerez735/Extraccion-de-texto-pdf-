@@ -1,6 +1,7 @@
 # Base Debian 13 (python:3.11-slim): la uv:python3.11-bookworm-slim (Debian 12) traía
 # vulnerabilidades Critical en openssl, gnutls, perl y glibc según Grype. Se queda en
-# Python 3.11 porque pypdf extrae ~8 % más rápido que con 3.12 (medido con k6).
+# Python 3.11 porque pypdf extraía ~8 % más rápido que con 3.12 (medido con k6); con
+# PyMuPDF no se volvió a comparar.
 FROM python:3.11-slim
 
 
