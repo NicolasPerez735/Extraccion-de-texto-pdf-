@@ -336,5 +336,6 @@ porque espera 30 s más.
     (~90 PDF/s) lo pone ahora el orquestador, un solo proceso al ~105 % de CPU, con las
     réplicas de extracción al ~20 %. Por ese camino el backpressure de extracción no llega a
     activarse; se verificó forzándolo con una cola de 5 (503 en 45 ms y sin reintento).
-  - **El WARNING del `503` por saturación no registra `details.reason`** (`cola_llena` o
-    `espera_agotada`): solo va en la respuesta. Queda como deuda.
+  - El WARNING del `503` por saturación no registraba `details.reason` (`cola_llena` o
+    `espera_agotada`), solo la respuesta lo traía. Arreglado en la 1.2.1: la línea de log
+    termina en `reason=<motivo>`.

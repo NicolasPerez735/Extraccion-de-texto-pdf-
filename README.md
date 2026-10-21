@@ -162,12 +162,13 @@ INFO extraccion_texto correlation_id=- servicio iniciado
 INFO app.services.extraction correlation_id=en-curso texto extraido paginas=1500 tamano_bytes=354327 caracteres=5526148 checksum=367aea83...
 INFO extraccion_texto correlation_id=en-curso method=POST path=/extraer status=200 duracion_ms=17833.1
 WARNING extraccion_texto correlation_id=demo-2 code=PDF_INVALID status=422 message=El archivo no es un PDF válido.
+WARNING extraccion_texto correlation_id=demo-3 code=DEPENDENCY_UNAVAILABLE status=503 message=El servicio está saturado, reintentar en un momento. reason=cola_llena
 ```
 
 | Nivel | Qué registra este servicio |
 | --- | --- |
 | `INFO` | Cada request (`method`, `path`, `status`, `duracion_ms`), el texto extraído (`paginas`, `tamano_bytes`, `caracteres`, `checksum`), inicio y apagado. |
-| `WARNING` | Rechazos del contrato (`PDF_INVALID`, `PDF_CORRUPTED`, `VALIDATION_ERROR`) con su `code`. |
+| `WARNING` | Rechazos del contrato (`PDF_INVALID`, `PDF_CORRUPTED`, `VALIDATION_ERROR`) con su `code`, y el `503` por saturación con `reason=cola_llena` o `reason=espera_agotada`. |
 | `ERROR` | Error no previsto (`INTERNAL_ERROR`), con traceback. |
 
 **No se registran** el Base64, el texto extraído ni el nombre del archivo (puede tener
