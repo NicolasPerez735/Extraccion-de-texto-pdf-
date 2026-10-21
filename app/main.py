@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("servicio iniciado")
     yield
     # uvicorn llega acá ante SIGTERM, después de cerrar el puerto y terminar las
-    # requests en curso (12-Factor IX). Cierra el pool de workers de /extract.
+    # requests en curso (12-Factor IX). Cierra el pool de workers.
     logger.info("apagado iniciado")
     app.state.lector.cerrar()
     logger.info("apagado completo")
