@@ -2,7 +2,7 @@
 
 Microservicio de extracción de texto de documentos PDF del proyecto
 `microservicios-pdf`. Implementa la sección `extraccion-texto` del contrato
-compartido `microservicios-pdf` (versión 1.3.0, en el repo `integracion`), y el endpoint
+compartido `microservicios-pdf` (versión 1.4.0, en el repo `integracion`), y el endpoint
 `POST /extract` del TP de carga y estrés (ver [TP de carga](#tp-de-carga-post-extract)).
 
 ## Responsabilidad
@@ -10,11 +10,13 @@ compartido `microservicios-pdf` (versión 1.3.0, en el repo `integracion`), y el
 Hace:
 
 - Recibir un PDF validado en Base64 junto con su nombre.
-- Extraer el texto de todas las páginas con `pypdf`.
+- Extraer el texto de todas las páginas con PyMuPDF (MuPDF, en C), en un pool de
+  procesos con backpressure.
 - Contar las páginas.
 - Calcular el checksum SHA-256 del archivo.
 - Propagar `X-Correlation-ID` y registrarlo en cada línea de log.
-- TP de carga: convertir un PDF binario a Markdown con PyMuPDF (`POST /extract`).
+- TP de carga: convertir un PDF binario a Markdown con el mismo lector y el mismo pool
+  (`POST /extract`).
 
 No hace:
 
@@ -61,9 +63,13 @@ HTTP `200`:
 - `checksum`: SHA-256 en hexadecimal de los bytes del archivo.
 - `texto`: el texto de cada página con contenido, separado por saltos de línea.
   Un PDF sin texto (por ejemplo, escaneado) responde `200` con `"texto": ""`.
+- Desde la versión 1.2.0 el texto sale de PyMuPDF y no de pypdf: puede cortar líneas o
+  separar palabras distinto (contrato 1.4.0). El checksum no cambia, porque se calcula
+  sobre los bytes del archivo.
 
-El header `X-Extraction-Time-Ms` informa cuánto tardó la extracción (decodificar,
-leer con pypdf y calcular el checksum), separado del tiempo total de la request.
+El header `X-Extraction-Time-Ms` informa cuánto tardó la extracción (esperar un worker
+del pool, leer con PyMuPDF y calcular el checksum), separado del tiempo total de la
+request.
 
 ### Errores
 
@@ -84,8 +90,12 @@ Formato común del contrato:
 | --- | ---: | --- |
 | `VALIDATION_ERROR` | `400` | Falta `archivo_base64` o `nombre`, `nombre` vacío o body inválido. |
 | `PDF_INVALID` | `422` | Base64 inválido, archivo vacío o contenido sin la firma `%PDF`. |
-| `PDF_CORRUPTED` | `422` | pypdf no puede abrir el archivo, recorrer sus páginas o extraer el texto. |
+| `PDF_CORRUPTED` | `422` | MuPDF no puede abrir el archivo o no encuentra ninguna página. |
+| `DEPENDENCY_UNAVAILABLE` | `503` | Backpressure: cola llena o espera vencida. `details.reason` es `cola_llena` o `espera_agotada`, con `Retry-After: 1`. |
 | `INTERNAL_ERROR` | `500` | Error no previsto. |
+
+El `503` por backpressure es igual en `/extraer` y en `/extract` (el pool es uno solo).
+El orquestador no lo reintenta: reintentar contra un servicio saturado lo satura más.
 
 ### Ejemplo
 
@@ -106,30 +116,40 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/extraer `
 app/
 ├── main.py                    # ensamblado: routers, middleware, errores, logs
 ├── controllers/
-│   ├── extraction.py          # POST /extraer
+│   ├── extraction.py          # POST /extraer y POST /extract (adaptadores HTTP)
 │   └── health.py              # GET /health
 ├── schemas/                   # request, response y error del contrato
 ├── services/
-│   ├── extraction.py          # caso de uso: Base64, checksum, delega en el extractor
-│   └── text_extractor.py      # puerto TextExtractor (Protocol)
+│   ├── extraction.py          # /extraer: Base64, texto plano y checksum
+│   ├── conversion.py          # /extract: Markdown con un encabezado por página
+│   ├── firma_pdf.py           # firma %PDF (la validan los dos casos de uso)
+│   └── lector_paginas.py      # puerto LectorPaginas (Protocol)
 ├── models/
-│   └── extraction.py          # TextoExtraido, PdfExtraction (dataclasses)
+│   └── extraction.py          # PdfExtraction, DocumentoMarkdown (dataclasses)
 └── core/
-    ├── composition.py         # único lugar donde se arma el servicio
-    ├── pdf_text_extractor.py  # adaptador de pypdf
+    ├── composition.py         # único lugar donde se arman el pool y los servicios
+    ├── pymupdf_paginas.py     # leer_paginas: el texto de cada página con PyMuPDF
+    ├── pool_lector.py         # PoolLectorPaginas: pool de procesos + backpressure
     ├── logs.py                # carga logging.json y agrega el correlation_id
     ├── config.py
-    └── exceptions.py          # PdfInvalidError, PdfCorruptedError
+    └── exceptions.py          # PdfInvalidError, PdfCorruptedError, ServiceOverloadedError
 ```
 
-Dirección de dependencias: `controller → service → TextExtractor (puerto)`,
-con el adaptador de pypdf en `core/`. El service no importa FastAPI ni pypdf, y
-recibe el extractor por constructor, sin valor por defecto.
+Dirección de dependencias: `controller → service → LectorPaginas (puerto)`, con el
+pool y PyMuPDF en `core/`. Los services no importan FastAPI ni PyMuPDF, y reciben el
+lector por constructor, sin valor por defecto.
 
-**Rendimiento.** `POST /extraer` es un endpoint sincrónico a propósito: FastAPI
-lo ejecuta en su threadpool, así pypdf (sincrónico y con uso intensivo de CPU)
-no bloquea el event loop y `/health` sigue respondiendo bajo carga. Por el GIL,
-el paralelismo real se obtiene con réplicas detrás de Traefik.
+**Dos endpoints, una sola extracción.** `/extraer` (contrato del orquestador: JSON con
+Base64 → texto, checksum y páginas) y `/extract` (enunciado del TP: PDF binario →
+Markdown) tienen consumidores y formatos distintos, así que siguen siendo dos rutas.
+Lo que hacen por dentro es lo mismo y está una sola vez: `leer_paginas` devuelve el
+texto de cada página y el mismo `PoolLectorPaginas` lo corre con el mismo backpressure.
+Cada caso de uso solo arma su respuesta (texto unido por saltos de línea, o Markdown).
+
+**Rendimiento.** Los dos endpoints son `async` y la lectura corre en un pool de procesos
+(`EXTRACT_WORKERS`), fuera del event loop: `/health` sigue respondiendo bajo carga y,
+como cada worker es un proceso, el GIL no limita. El paralelismo entre máquinas se
+obtiene con réplicas detrás de Traefik.
 
 ## Logs (12-Factor XI)
 
@@ -152,9 +172,10 @@ WARNING extraccion_texto correlation_id=demo-2 code=PDF_INVALID status=422 messa
 
 **No se registran** el Base64, el texto extraído ni el nombre del archivo (puede tener
 datos personales): el documento se identifica por su `checksum`. Hay un test que lo
-verifica. El `correlation_id` viaja en un `ContextVar` y lo agrega el formato, así que
-llega también al threadpool donde corre pypdf. Los avisos internos de pypdf quedan en
-`ERROR`, y el access log de uvicorn está desactivado porque lo registra la app.
+verifica. El `correlation_id` viaja en un `ContextVar` y lo agrega el formato. Los
+avisos que MuPDF escribe a `stderr` están desactivados (no llevan `correlation_id`; el
+error se registra al responder `PDF_CORRUPTED`), y el access log de uvicorn está
+desactivado porque lo registra la app.
 
 ## Finalización segura (12-Factor IX)
 
@@ -190,21 +211,22 @@ Copiar `.env.example` como `.env`. No se versionan secretos.
 | Variable | Predeterminado | Descripción |
 | --- | --- | --- |
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING` o `ERROR`. Otro valor impide arrancar. |
-| `EXTRACT_WORKERS` | `1` | Procesos que convierten a Markdown en cada réplica (`/extract`). |
-| `EXTRACT_MAX_QUEUE` | `100` | Requests de `/extract` que pueden esperar un worker; más → `503`. |
+| `EXTRACT_WORKERS` | `1` | Procesos que leen PDFs en cada réplica. |
+| `EXTRACT_MAX_QUEUE` | `100` | Requests que pueden esperar un worker; más → `503`. |
 | `EXTRACT_QUEUE_TIMEOUT_SECONDS` | `25` | Espera máxima por un worker; más → `503`. |
 | `PUERTO` | `8080` | Solo `docker-compose.yml`: puerto del host donde publica el proxy. |
 
-Las tres `EXTRACT_*` son opcionales y solo afectan a `/extract` (contrato 1.3.0).
+Las tres `EXTRACT_*` son opcionales y, desde el contrato 1.4.0, rigen para `/extraer` y
+`/extract` (comparten el pool).
 
 ## Docker
 
 ```powershell
-docker build -t extraccion-texto:1.1.2 .
-docker run --rm -p 8000:8000 extraccion-texto:1.1.2
+docker build -t extraccion-texto:1.2.0 .
+docker run --rm -p 8000:8000 extraccion-texto:1.2.0
 ```
 
-La versión del servicio es la de `pyproject.toml` (1.1.2): es la que muestra Swagger en
+La versión del servicio es la de `pyproject.toml` (1.2.0): es la que muestra Swagger en
 `/docs` y el tag de la imagen. `tests/integration/test_openapi.py` verifica que
 `FastAPI(version=...)` en `app/main.py` coincida con `pyproject.toml`; en una versión
 nueva se cambian los dos.
@@ -247,14 +269,18 @@ uv run black --check .
 
 La suite es hermética: no necesita red, base de datos ni `.env`.
 
-- **Unitarios del servicio:** campos del contrato, checksum, bytes que llegan
-  al extractor, Base64 inválido, archivo vacío, contenido que no es PDF, Base64
-  con saltos de línea. Usan un extractor de prueba inyectado.
-- **Unitarios del adaptador de pypdf:** varias páginas, PDF truncado y PDF con
-  el árbol de páginas roto, con PDFs reales generados en `tests/conftest.py`.
-- **Integración HTTP:** respuesta del contrato, cada código de error, PDF sin
-  texto, `X-Correlation-ID`, `X-Extraction-Time-Ms` y logs. El error no previsto
-  se prueba inyectando un servicio que falla (`app.dependency_overrides`).
+- **Unitarios de los servicios:** campos del contrato, checksum, texto unido de las
+  páginas con contenido, Markdown por página, bytes que llegan al lector, Base64
+  inválido, archivo vacío, contenido que no es PDF, Base64 con saltos de línea. Usan un
+  lector de prueba inyectado.
+- **Unitarios de `leer_paginas`:** varias páginas, página vacía, PDF truncado, PDF con
+  el árbol de páginas roto (0 páginas) y ejecución en otro proceso, con PDFs reales
+  generados en `tests/conftest.py`.
+- **Unitarios del pool:** cola llena, espera vencida y atención del que espera.
+- **Integración HTTP:** respuesta del contrato, cada código de error (incluido el `503`
+  por backpressure en los dos endpoints), PDF sin texto, `X-Correlation-ID`,
+  `X-Extraction-Time-Ms` y logs. El lector real corre en un pool de threads; el error no
+  previsto y la saturación se prueban inyectando dobles (`app.dependency_overrides`).
 - **Logs:** `LOG_LEVEL` inválido, formato con `correlation_id`, evento de extracción,
   ausencia de datos sensibles, inicio y apagado en el `lifespan`.
 
@@ -268,9 +294,17 @@ apagado con `SIGTERM`, que depende del proceso de uvicorn y se probó a mano (ve
   casos a cubrir pero no le asigna código; es un PDF válido y se puede guardar.
 - **Sin límite de tamaño.** El contrato asigna esa validación a
   `validacion-pdf`; el orquestador siempre valida antes de extraer.
-- **Errores de pypdf → `PDF_CORRUPTED`.** Se captura `PyPdfError` (la base de
-  los errores de pypdf). Una excepción de otro tipo responde
-  `INTERNAL_ERROR`.
+- **Errores de MuPDF → `PDF_CORRUPTED`.** Se captura `RuntimeError` (la base de
+  `FileDataError`) y también un documento de 0 páginas: con el árbol de páginas roto
+  MuPDF abre el archivo sin fallar, donde pypdf sí fallaba. Una excepción de otro tipo
+  responde `INTERNAL_ERROR`.
+- **pypdf → PyMuPDF en `/extraer` (1.2.0).** PyMuPDF gasta entre 5 y 10 veces menos CPU
+  (ver `docs/informe-carga.md`, sección 3.3). El texto puede diferir en saltos de línea
+  o espacios; lo declara el contrato 1.4.0.
+- **Licencia de PyMuPDF.** Es AGPL: sirve para un trabajo académico, pero un uso
+  comercial cerrado necesitaría la licencia comercial de Artifex o volver a pypdf.
+- **El primer request después de arrancar es más lento:** el pool crea su proceso
+  worker recién cuando lo necesita.
 - **Historial de TDD.** El primer ciclo tuvo commit rojo (`5731e43`), pero
   `5f25c14 test(...)` incluyó código de producción y `0191768 feat(...)` trajo
   código y tests juntos. Desde la adaptación al contrato (rama

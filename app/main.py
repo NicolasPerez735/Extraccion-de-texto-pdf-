@@ -11,33 +11,31 @@ from fastapi.responses import JSONResponse
 
 from app.controllers.extraction import router as extraction_router
 from app.controllers.health import router as health_router
-from app.core.composition import crear_convertidor
+from app.core.composition import crear_lector
 from app.core.config import get_settings
 from app.core.exceptions import DomainError, ServiceOverloadedError
 from app.core.logs import configurar_logs, correlation_id_actual
 from app.schemas.errors import ErrorDetail, ErrorResponse
 
-# pypdf avisa por logging sin correlation_id: logging.json lo deja en ERROR; el error
-# que importa ya se registra con su correlation_id al responder PDF_CORRUPTED.
 configurar_logs(get_settings().log_level)
 logger = logging.getLogger("extraccion_texto")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    app.state.convertidor = crear_convertidor(get_settings())
+    app.state.lector = crear_lector(get_settings())
     logger.info("servicio iniciado")
     yield
     # uvicorn llega acá ante SIGTERM, después de cerrar el puerto y terminar las
-    # requests en curso (12-Factor IX). Cierra el pool de workers de /extract.
+    # requests en curso (12-Factor IX). Cierra el pool de workers.
     logger.info("apagado iniciado")
-    app.state.convertidor.cerrar()
+    app.state.lector.cerrar()
     logger.info("apagado completo")
 
 
 app = FastAPI(
     title="PDF Extraction",
-    version="1.1.2",
+    version="1.2.0",
     lifespan=lifespan,
 )
 

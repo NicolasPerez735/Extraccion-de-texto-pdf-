@@ -8,7 +8,7 @@ import logging
 from app.core.exceptions import PdfInvalidError
 from app.models.extraction import PdfExtraction
 from app.services.firma_pdf import validar_firma_pdf
-from app.services.text_extractor import TextExtractor
+from app.services.lector_paginas import LectorPaginas
 
 logger = logging.getLogger(__name__)
 
@@ -23,20 +23,20 @@ def _decodificar_pdf(archivo_base64: str) -> bytes:
 
 
 class ExtractionService:
-    """Decodifica el PDF, delega la lectura en el extractor y calcula el checksum."""
+    """Decodifica el PDF, delega la lectura de las páginas y calcula el checksum."""
 
-    def __init__(self, extractor: TextExtractor) -> None:
-        self._extractor = extractor
+    def __init__(self, lector: LectorPaginas) -> None:
+        self._lector = lector
 
-    def extraer(self, archivo_base64: str, nombre: str) -> PdfExtraction:
+    async def extraer(self, archivo_base64: str, nombre: str) -> PdfExtraction:
         contenido = _decodificar_pdf(archivo_base64)
-        resultado = self._extractor.extract(contenido)
+        paginas = await self._lector.leer(contenido)
         extraccion = PdfExtraction(
             nombre=nombre,
-            texto=resultado.texto,
+            texto="\n".join(texto for texto in paginas if texto),
             checksum=hashlib.sha256(contenido).hexdigest(),
             tamano_bytes=len(contenido),
-            paginas=resultado.paginas,
+            paginas=len(paginas),
         )
         # Sin nombre ni texto (contrato 1.2.0): el documento se identifica por checksum.
         logger.info(

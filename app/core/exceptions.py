@@ -14,7 +14,7 @@ class PdfInvalidError(DomainError):
 
 
 class PdfCorruptedError(DomainError):
-    """Raised when pypdf or MuPDF cannot read the PDF or extract its text."""
+    """Raised when MuPDF cannot read the PDF or it has no pages."""
 
     code = "PDF_CORRUPTED"
 
