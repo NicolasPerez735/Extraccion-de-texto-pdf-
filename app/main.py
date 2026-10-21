@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="PDF Extraction",
-    version="1.2.0",
+    version="1.2.1",
     lifespan=lifespan,
 )
 
@@ -55,13 +55,15 @@ def error_response(
     handler de Exception corre fuera del middleware de correlation ID."""
     correlation_id = request.state.correlation_id
     # ERROR solo para fallas no esperadas; un 503 por saturación es recuperable
-    # (WARNING, contrato 1.2.0).
+    # (WARNING, contrato 1.2.0). Su motivo (details.reason) también va al log.
+    motivo = f" reason={details['reason']}" if "reason" in details else ""
     logger.log(
         logging.ERROR if exc_info is not None else logging.WARNING,
-        "code=%s status=%s message=%s",
+        "code=%s status=%s message=%s%s",
         code,
         status_code,
         message,
+        motivo,
         exc_info=exc_info,
     )
     body = ErrorResponse(

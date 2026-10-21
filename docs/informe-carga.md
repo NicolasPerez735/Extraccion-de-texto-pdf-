@@ -315,8 +315,16 @@ porque espera 30 s más.
 - Los PDFs de prueba son generados; con la carpeta oficial los tiempos absolutos cambian.
 - **Docker Desktop en Windows pierde algunas conexiones bajo carga** (5 de 2.852 en una
   corrida; sección 5.3) y el reenvío de puertos IPv6 se colgó una vez después de un
-  `down`/`up`. No es del servicio: esas requests no le llegan. En Linux, o midiendo desde un
-  contenedor en la misma red, no debería pasar; no se pudo probar en esta entrega.
+  `down`/`up`. No es del servicio: esas requests no le llegan. **No es solo el reenvío de
+  puertos del host:** en la integración (2026-10-21, 10 020 requests por el orquestador)
+  3 llamadas `orquestador → traefik-interno → /extraer` tampoco llegaron a la réplica,
+  todas dentro de la red `redutn`; el reintento del orquestador las cubrió a los 10 s. Con
+  el access log de `traefik-interno` se ubicaron: Traefik las mandaba a una réplica por una
+  conexión keep-alive que uvicorn cerraba en ese momento (uvicorn cierra las ociosas a los
+  5 s; Traefik las guardaba 90 s). Con `idleConnTimeout: 4s` en `traefik-interno` quedaron en
+  0 de 14.520 (README de `integracion`, "Requests perdidas hacia extracción"). Es probable
+  que las pérdidas del TP sean la misma carrera entre el proxy y uvicorn, pero no se midió.
+  En Linux no se probó.
 - Las mediciones son de una sola máquina y una corrida por configuración (dos en B y E):
   sirven para comparar configuraciones, no como valores absolutos.
 - El tiempo de `X-Extraction-Time-Ms` en `/extract` incluye la espera en la cola de la
@@ -325,4 +333,15 @@ porque espera 30 s más.
   ni tablas. Una conversión más fiel (por ejemplo `pymupdf4llm`) cuesta bastante más CPU.
 - Desde la versión 1.2.0 (contrato 1.4.0) `/extraer`, el endpoint del orquestador, también
   usa PyMuPDF y el mismo pool con backpressure. Las mediciones de este informe son de
-  `/extract`; la del flujo completo por el orquestador queda en el README de `integracion`.
+  `/extract`; la del flujo completo por el orquestador queda en el README de `integracion`
+  ("Prueba de carga con extracción 1.2.0"). Resumen de esa medición (2026-10-21, 3 réplicas):
+  - El escenario del profesor (vegeta 30/s, 10 020 requests) bajó de 115 a 69 ms de promedio,
+    y k6 con 5 VUs pasó de 37,4 a 93,5 PDF/s; 1 réplica con 5 VUs, de 8,3 a 53,5 PDF/s.
+  - **En el flujo completo la extracción dejó de ser el cuello de botella**: el techo
+    (~90 PDF/s) lo pone ahora el orquestador, un solo proceso al ~105 % de CPU, con las
+    réplicas de extracción al ~20 %. Por ese camino el backpressure de extracción no llega a
+    activarse; se verificó forzándolo con una cola de 5 (503 en 45 ms y sin reintento).
+  - El WARNING del `503` por saturación no registraba `details.reason` (`cola_llena` o
+    `espera_agotada`), solo la respuesta lo traía. Arreglado en la 1.2.1: la línea de log
+    termina en `reason=<motivo>`. Verificado en el stack (backpressure forzado, cola 5):
+    517 rechazos en `WARNING` con `reason=cola_llena`.

@@ -162,12 +162,13 @@ INFO extraccion_texto correlation_id=- servicio iniciado
 INFO app.services.extraction correlation_id=en-curso texto extraido paginas=1500 tamano_bytes=354327 caracteres=5526148 checksum=367aea83...
 INFO extraccion_texto correlation_id=en-curso method=POST path=/extraer status=200 duracion_ms=17833.1
 WARNING extraccion_texto correlation_id=demo-2 code=PDF_INVALID status=422 message=El archivo no es un PDF válido.
+WARNING extraccion_texto correlation_id=demo-3 code=DEPENDENCY_UNAVAILABLE status=503 message=El servicio está saturado, reintentar en un momento. reason=cola_llena
 ```
 
 | Nivel | Qué registra este servicio |
 | --- | --- |
 | `INFO` | Cada request (`method`, `path`, `status`, `duracion_ms`), el texto extraído (`paginas`, `tamano_bytes`, `caracteres`, `checksum`), inicio y apagado. |
-| `WARNING` | Rechazos del contrato (`PDF_INVALID`, `PDF_CORRUPTED`, `VALIDATION_ERROR`) con su `code`. |
+| `WARNING` | Rechazos del contrato (`PDF_INVALID`, `PDF_CORRUPTED`, `VALIDATION_ERROR`) con su `code`, y el `503` por saturación con `reason=cola_llena` o `reason=espera_agotada`. |
 | `ERROR` | Error no previsto (`INTERNAL_ERROR`), con traceback. |
 
 **No se registran** el Base64, el texto extraído ni el nombre del archivo (puede tener
@@ -222,11 +223,11 @@ Las tres `EXTRACT_*` son opcionales y, desde el contrato 1.4.0, rigen para `/ext
 ## Docker
 
 ```powershell
-docker build -t extraccion-texto:1.2.0 .
-docker run --rm -p 8000:8000 extraccion-texto:1.2.0
+docker build -t extraccion-texto:1.2.1 .
+docker run --rm -p 8000:8000 extraccion-texto:1.2.1
 ```
 
-La versión del servicio es la de `pyproject.toml` (1.2.0): es la que muestra Swagger en
+La versión del servicio es la de `pyproject.toml` (1.2.1): es la que muestra Swagger en
 `/docs` y el tag de la imagen. `tests/integration/test_openapi.py` verifica que
 `FastAPI(version=...)` en `app/main.py` coincida con `pyproject.toml`; en una versión
 nueva se cambian los dos.
