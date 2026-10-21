@@ -17,8 +17,6 @@ from app.core.exceptions import DomainError, ServiceOverloadedError
 from app.core.logs import configurar_logs, correlation_id_actual
 from app.schemas.errors import ErrorDetail, ErrorResponse
 
-# pypdf avisa por logging sin correlation_id: logging.json lo deja en ERROR; el error
-# que importa ya se registra con su correlation_id al responder PDF_CORRUPTED.
 configurar_logs(get_settings().log_level)
 logger = logging.getLogger("extraccion_texto")
 

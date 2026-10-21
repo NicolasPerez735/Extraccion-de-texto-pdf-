@@ -4,12 +4,6 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
-class TextoExtraido:
-    texto: str
-    paginas: int
-
-
-@dataclass(frozen=True)
 class PdfExtraction:
     nombre: str
     texto: str

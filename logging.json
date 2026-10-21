@@ -16,8 +16,7 @@
   "loggers": {
     "uvicorn": {"handlers": [], "propagate": true},
     "uvicorn.error": {"handlers": [], "propagate": true},
-    "uvicorn.access": {"handlers": [], "propagate": false},
-    "pypdf": {"level": "ERROR"}
+    "uvicorn.access": {"handlers": [], "propagate": false}
   },
   "root": {"handlers": ["stdout"], "level": "INFO"}
 }
