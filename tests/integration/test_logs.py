@@ -3,7 +3,9 @@ import logging
 
 from fastapi.testclient import TestClient
 
+from app.core.composition import get_extraction_service
 from app.main import app
+from app.services.extraction import ExtractionService
 
 
 def _mensajes(caplog) -> list[str]:
@@ -58,3 +60,26 @@ def test_registra_inicio_y_apagado_ordenados(caplog):
     mensajes = _mensajes(caplog)
     assert "servicio iniciado" in mensajes
     assert mensajes.index("apagado iniciado") < mensajes.index("apagado completo")
+
+
+def test_la_saturacion_se_registra_en_warning_con_su_motivo(
+    lector_saturado, pdf_request, caplog
+):
+    # El motivo (cola_llena o espera_agotada) tiene que quedar en el log, no solo en la
+    # respuesta: es lo que se busca en docker compose logs cuando aparecen 503.
+    caplog.set_level(logging.INFO)
+    service = ExtractionService(lector_saturado)
+    app.dependency_overrides[get_extraction_service] = lambda: service
+    try:
+        TestClient(app).post(
+            "/extraer", json=pdf_request, headers={"X-Correlation-ID": "cid-3"}
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    rechazos = [
+        r for r in caplog.records if "code=DEPENDENCY_UNAVAILABLE" in r.getMessage()
+    ]
+    assert [r.levelno for r in rechazos] == [logging.WARNING]
+    assert "reason=cola_llena" in rechazos[0].getMessage()
+    assert rechazos[0].correlation_id == "cid-3"
