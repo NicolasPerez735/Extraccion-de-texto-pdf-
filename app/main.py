@@ -1,4 +1,5 @@
 import logging
+import socket
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -13,6 +14,7 @@ from app.controllers.extraction import router as extraction_router
 from app.controllers.health import router as health_router
 from app.core.composition import crear_lector
 from app.core.config import get_settings
+from app.core.consul_registry import ConsulRegistry
 from app.core.exceptions import DomainError, ServiceOverloadedError
 from app.core.logs import configurar_logs, correlation_id_actual
 from app.schemas.errors import ErrorDetail, ErrorResponse
@@ -23,14 +25,34 @@ logger = logging.getLogger("extraccion_texto")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    app.state.lector = crear_lector(get_settings())
+    settings = get_settings()
+    app.state.lector = crear_lector(settings)
+    registry = _consul_registry(settings)
+    if registry:
+        await registry.register()
     logger.info("servicio iniciado")
-    yield
-    # uvicorn llega acá ante SIGTERM, después de cerrar el puerto y terminar las
-    # requests en curso (12-Factor IX). Cierra el pool de workers.
-    logger.info("apagado iniciado")
-    app.state.lector.cerrar()
-    logger.info("apagado completo")
+    try:
+        yield
+    finally:
+        # uvicorn llega acá ante SIGTERM, después de cerrar el puerto y terminar las
+        # requests en curso (12-Factor IX). Cierra el pool de workers.
+        logger.info("apagado iniciado")
+        if registry:
+            try:
+                await registry.deregister()
+            except Exception:
+                logger.exception("no se pudo deregistrar el servicio de Consul")
+        app.state.lector.cerrar()
+        logger.info("apagado completo")
+
+
+def _consul_registry(settings) -> ConsulRegistry | None:
+    if not settings.consul_enabled:
+        return None
+    return ConsulRegistry(
+        settings=settings,
+        instance_id=f"extraccion-{socket.gethostname()}",
+    )
 
 
 app = FastAPI(
