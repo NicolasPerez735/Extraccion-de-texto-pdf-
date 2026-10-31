@@ -57,7 +57,7 @@ def _consul_registry(settings) -> ConsulRegistry | None:
 
 app = FastAPI(
     title="PDF Extraction",
-    version="1.2.1",
+    version="1.2.2",
     lifespan=lifespan,
 )
 
