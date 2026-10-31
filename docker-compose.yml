@@ -11,17 +11,12 @@ name: extraccion-tp-carga
 services:
   extraccion:
     build: .
-    image: extraccion-texto:1.2.1
+    image: extraccion-texto:1.2.2
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       EXTRACT_WORKERS: ${EXTRACT_WORKERS:-1}
       EXTRACT_MAX_QUEUE: ${EXTRACT_MAX_QUEUE:-100}
       EXTRACT_QUEUE_TIMEOUT_SECONDS: ${EXTRACT_QUEUE_TIMEOUT_SECONDS:-25}
-      CONSUL_ENABLED: "true"
-      CONSUL_HTTP_ADDR: http://consul:8500
-      CONSUL_HTTP_TOKEN_FILE: /run/secrets/consul_microservices_token
-      CONSUL_SERVICE_ADDRESS: extraccion
-      CONSUL_SERVICE_PORT: "8000"
     deploy:
       replicas: 5
       resources:
@@ -45,10 +40,6 @@ services:
       - "traefik.http.routers.extraccion.entrypoints=web"
       - "traefik.http.services.extraccion.loadbalancer.server.port=8000"
     # Mayor que los 30 s de --timeout-graceful-shutdown (12-Factor IX).
-    secrets:
-      - consul_microservices_token
-    networks:
-      - redutn
     stop_grace_period: 40s
     restart: unless-stopped
 
@@ -81,12 +72,3 @@ services:
       extraccion:
         condition: service_healthy
     restart: unless-stopped
-
-networks:
-  redutn:
-    external: true
-    name: redutn
-
-secrets:
-  consul_microservices_token:
-    file: ../dockers/consul/generated/microservices.token
