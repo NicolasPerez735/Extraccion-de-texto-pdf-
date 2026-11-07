@@ -220,14 +220,30 @@ Copiar `.env.example` como `.env`. No se versionan secretos.
 Las tres `EXTRACT_*` son opcionales y, desde el contrato 1.4.0, rigen para `/extraer` y
 `/extract` (comparten el pool).
 
+### Configuración desde Consul (contrato 1.6.0)
+
+Con `CONSUL_ENABLED=true`, las variables de la tabla salen del KV de Consul, bajo
+`config/extraccion/` (por ejemplo `config/extraccion/EXTRACT_WORKERS`), y tienen prioridad
+sobre el entorno. Del entorno solo llega cómo conectarse a Consul: `CONSUL_ENABLED`,
+`CONSUL_HTTP_ADDR` y `CONSUL_HTTP_TOKEN_FILE` (el token, como Docker secret).
+`CONSUL_SERVICE_ADDRESS` y `CONSUL_SERVICE_PORT` también pueden venir del KV.
+
+- Las claves las carga el servicio `consul-config` del compose de integración, desde
+  `integracion/env/extraccion.env`.
+- Si no hay claves bajo `config/extraccion/` o Consul no responde, el servicio no
+  arranca: la configuración no se inventa.
+- Sin Consul (tests y desarrollo local), todo sale del entorno, como antes.
+- Lo implementan `app/core/consul_config.py` (lee el KV) y `cargar_settings()` en
+  `app/core/config.py`.
+
 ## Docker
 
 ```powershell
-docker build -t extraccion-texto:1.2.2 .
-docker run --rm -p 8000:8000 extraccion-texto:1.2.2
+docker build -t extraccion-texto:1.3.0 .
+docker run --rm -p 8000:8000 extraccion-texto:1.3.0
 ```
 
-La versión del servicio es la de `pyproject.toml` (1.2.2): es la que muestra Swagger en
+La versión del servicio es la de `pyproject.toml` (1.3.0): es la que muestra Swagger en
 `/docs` y el tag de la imagen. `tests/integration/test_openapi.py` verifica que
 `FastAPI(version=...)` en `app/main.py` coincida con `pyproject.toml`; en una versión
 nueva se cambian los dos.
