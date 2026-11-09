@@ -239,11 +239,11 @@ sobre el entorno. Del entorno solo llega cómo conectarse a Consul: `CONSUL_ENAB
 ## Docker
 
 ```powershell
-docker build -t extraccion-texto:1.3.0 .
-docker run --rm -p 8000:8000 extraccion-texto:1.3.0
+docker build -t extraccion-texto:1.3.1 .
+docker run --rm -p 8000:8000 extraccion-texto:1.3.1
 ```
 
-La versión del servicio es la de `pyproject.toml` (1.3.0): es la que muestra Swagger en
+La versión del servicio es la de `pyproject.toml` (1.3.1): es la que muestra Swagger en
 `/docs` y el tag de la imagen. `tests/integration/test_openapi.py` verifica que
 `FastAPI(version=...)` en `app/main.py` coincida con `pyproject.toml`; en una versión
 nueva se cambian los dos.
