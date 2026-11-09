@@ -3,7 +3,7 @@ from concurrent.futures import ProcessPoolExecutor
 
 import pytest
 
-from app.core.exceptions import PdfCorruptedError
+from app.core.exceptions import PdfCorruptedError, PdfInvalidError
 from app.core.pool_lector import PoolLectorPaginas
 from app.core.pymupdf_paginas import leer_paginas
 
@@ -28,6 +28,21 @@ def test_leer_paginas_raises_pdf_corrupted_when_there_are_no_pages(make_pdf) -> 
 
     with pytest.raises(PdfCorruptedError):
         leer_paginas(pdf)
+
+
+def test_leer_paginas_rejects_a_password_protected_pdf(pdf_con_contrasena) -> None:
+    # Sin la contraseña MuPDF no puede leer las páginas: es PDF_INVALID (como en
+    # validacion-pdf), no un error interno.
+    with pytest.raises(PdfInvalidError) as error:
+        leer_paginas(pdf_con_contrasena)
+
+    assert error.value.details == {"reason": "protegido_con_contrasena"}
+
+
+def test_leer_paginas_reads_a_pdf_with_only_an_owner_password(
+    pdf_solo_con_permisos,
+) -> None:
+    assert leer_paginas(pdf_solo_con_permisos) == ["Visible"]
 
 
 def test_the_reading_runs_in_another_process(make_pdf) -> None:

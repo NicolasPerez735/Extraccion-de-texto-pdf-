@@ -1,6 +1,7 @@
 import base64
 from concurrent.futures import ThreadPoolExecutor
 
+import pymupdf
 import pytest
 from fastapi.testclient import TestClient
 
@@ -94,6 +95,25 @@ def lector_saturado() -> LectorSaturado:
 @pytest.fixture
 def make_pdf():
     return build_pdf
+
+
+def cifrar(pdf: bytes, user_pw: str) -> bytes:
+    """El mismo PDF cifrado con AES-256. Con user_pw pide contraseña para abrirse;
+    con user_pw vacía solo restringe permisos (contraseña de dueño)."""
+    with pymupdf.open(stream=pdf, filetype="pdf") as documento:
+        return documento.tobytes(
+            encryption=pymupdf.PDF_ENCRYPT_AES_256, user_pw=user_pw, owner_pw="duenio"
+        )
+
+
+@pytest.fixture
+def pdf_con_contrasena() -> bytes:
+    return cifrar(build_pdf("Secreto"), user_pw="secreta")
+
+
+@pytest.fixture
+def pdf_solo_con_permisos() -> bytes:
+    return cifrar(build_pdf("Visible"), user_pw="")
 
 
 @pytest.fixture
