@@ -5,12 +5,21 @@ class DomainError(Exception):
     """Base exception for expected domain errors."""
 
     code = "DOMAIN_ERROR"
+    # Atributo de clase y no de instancia: los errores viajan por pickle desde el pool
+    # de procesos, y pickle solo reconstruye los argumentos del constructor.
+    details: dict = {}
 
 
 class PdfInvalidError(DomainError):
     """Raised when the content is not a PDF (Base64 inválido, vacío o sin %PDF)."""
 
     code = "PDF_INVALID"
+
+
+class PdfProtectedError(PdfInvalidError):
+    """El PDF pide contraseña para abrirse: sin ella no se pueden leer las páginas."""
+
+    details = {"reason": "protegido_con_contrasena"}
 
 
 class PdfCorruptedError(DomainError):
