@@ -89,7 +89,7 @@ Formato común del contrato:
 | Código | HTTP | Cuándo |
 | --- | ---: | --- |
 | `VALIDATION_ERROR` | `400` | Falta `archivo_base64` o `nombre`, `nombre` vacío o body inválido. |
-| `PDF_INVALID` | `422` | Base64 inválido, archivo vacío o contenido sin la firma `%PDF`. |
+| `PDF_INVALID` | `422` | Base64 inválido, archivo vacío, contenido sin la firma `%PDF` o PDF protegido con contraseña (este último con `details.reason = "protegido_con_contrasena"`). |
 | `PDF_CORRUPTED` | `422` | MuPDF no puede abrir el archivo o no encuentra ninguna página. |
 | `DEPENDENCY_UNAVAILABLE` | `503` | Backpressure: cola llena o espera vencida. `details.reason` es `cola_llena` o `espera_agotada`, con `Retry-After: 1`. |
 | `INTERNAL_ERROR` | `500` | Error no previsto. |
@@ -239,11 +239,11 @@ sobre el entorno. Del entorno solo llega cómo conectarse a Consul: `CONSUL_ENAB
 ## Docker
 
 ```powershell
-docker build -t extraccion-texto:1.3.0 .
-docker run --rm -p 8000:8000 extraccion-texto:1.3.0
+docker build -t extraccion-texto:1.3.1 .
+docker run --rm -p 8000:8000 extraccion-texto:1.3.1
 ```
 
-La versión del servicio es la de `pyproject.toml` (1.3.0): es la que muestra Swagger en
+La versión del servicio es la de `pyproject.toml` (1.3.1): es la que muestra Swagger en
 `/docs` y el tag de la imagen. `tests/integration/test_openapi.py` verifica que
 `FastAPI(version=...)` en `app/main.py` coincida con `pyproject.toml`; en una versión
 nueva se cambian los dos.
@@ -315,6 +315,13 @@ apagado con `SIGTERM`, que depende del proceso de uvicorn y se probó a mano (ve
   `FileDataError`) y también un documento de 0 páginas: con el árbol de páginas roto
   MuPDF abre el archivo sin fallar, donde pypdf sí fallaba. Una excepción de otro tipo
   responde `INTERNAL_ERROR`.
+- **PDF con contraseña → `PDF_INVALID`.** MuPDF abre el archivo pero no deja leer las
+  páginas (lanzaba `ValueError` y salía un 500). Ahora se revisa `needs_pass` al abrirlo
+  y se responde `PDF_INVALID` con `details.reason = "protegido_con_contrasena"`, igual
+  que `validacion-pdf`. Por el orquestador no llega (lo frena validación), pero el
+  servicio no depende de eso. Un PDF con solo contraseña de dueño se lee normalmente.
+- **Versiones mínimas.** Las dependencias se declaran con `>=` la versión probada, el
+  mismo criterio en los cinco microservicios; `uv.lock` fija la versión exacta.
 - **pypdf → PyMuPDF en `/extraer` (1.2.0).** PyMuPDF gasta entre 5 y 10 veces menos CPU
   (ver `docs/informe-carga.md`, sección 3.3). El texto puede diferir en saltos de línea
   o espacios; lo declara el contrato 1.4.0.

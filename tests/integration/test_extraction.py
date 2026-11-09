@@ -88,6 +88,20 @@ def test_corrupted_pdf_returns_pdf_corrupted(client: TestClient) -> None:
     assert response.json()["error"]["code"] == "PDF_CORRUPTED"
 
 
+def test_password_protected_pdf_returns_pdf_invalid(
+    client: TestClient, pdf_con_contrasena
+) -> None:
+    response = client.post(
+        "/extraer",
+        json={"archivo_base64": encode(pdf_con_contrasena), "nombre": "protegido.pdf"},
+    )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "PDF_INVALID"
+    assert error["details"] == {"reason": "protegido_con_contrasena"}
+
+
 def test_pdf_whose_pages_cannot_be_read_returns_pdf_corrupted(
     client: TestClient, make_pdf
 ) -> None:

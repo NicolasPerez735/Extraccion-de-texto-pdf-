@@ -57,7 +57,7 @@ def _consul_registry(settings) -> ConsulRegistry | None:
 
 app = FastAPI(
     title="PDF Extraction",
-    version="1.3.0",
+    version="1.3.1",
     lifespan=lifespan,
 )
 
@@ -107,7 +107,7 @@ def error_response(
 async def handle_domain_error(request: Request, error: DomainError) -> JSONResponse:
     # Todos los errores de dominio del contrato para este servicio
     # (PDF_INVALID, PDF_CORRUPTED) son 422.
-    return error_response(request, 422, error.code, str(error), {})
+    return error_response(request, 422, error.code, str(error), dict(error.details))
 
 
 @app.exception_handler(ServiceOverloadedError)
